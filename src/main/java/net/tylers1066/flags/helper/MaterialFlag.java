@@ -14,18 +14,20 @@ public class MaterialFlag extends Flag<Material> {
 
     @Override
     public Material parseInput(FlagContext flagContext) throws InvalidFlagFormat {
-        Material material = Material.matchMaterial(flagContext.getUserInput());
-        if (material != null)
+        String input = flagContext.getUserInput().trim();
+        Material material = Material.matchMaterial(input);
+        if (material != null) {
             return material;
-        else
-            throw new InvalidFlagFormat("Unable to find the material! Please refer to https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Material.html for valid ids");
+        }
+        throw new InvalidFlagFormat("Unknown material '" + input
+                + "'. Please refer to https://jd.papermc.io/paper/1.21.4/org/bukkit/Material.html for valid names.");
     }
 
     @Override
     public Material unmarshal(@Nullable Object o) {
-        if(o == null)
+        if (o == null) {
             return null;
-
+        }
         return Material.matchMaterial(o.toString());
     }
 

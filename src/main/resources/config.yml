@@ -1,0 +1,19 @@
+# WGBlockFlags Configuration
+# Plugin version: 2.0.0
+
+# Messages sent to players when actions are denied
+# Use {block} for block type, {player} for player name
+# Use color codes with & (e.g., &c for red, &a for green)
+# Set to empty string "" to disable the message
+messages:
+  deny-place: "&cYou are not allowed to place &e{block} &chere."
+  deny-break: "&cYou are not allowed to break &e{block} &chere."
+  deny-interact: "&cYou are not allowed to interact with &e{block} &chere."
+
+# Debug mode - logs flag checks to console
+# Useful for troubleshooting flag configurations
+debug: false
+
+# Cooldown for deny messages in seconds (prevents message spam)
+# Set to 0 to send every time
+message-cooldown: 2

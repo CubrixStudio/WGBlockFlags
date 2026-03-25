@@ -2,7 +2,7 @@ package net.tylers1066.listener;
 
 import com.sk89q.worldguard.bukkit.event.block.BreakBlockEvent;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
-import net.tylers1066.flags.Flags;
+import net.tylers1066.WGBlockFlags;
 import net.tylers1066.utils.WGUtils;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -10,53 +10,36 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
 
-import java.util.Set;
+public class BreakListener extends AbstractBlockListener {
 
-public class BreakListener implements Listener {
+    public BreakListener(WGBlockFlags plugin) {
+        super(plugin);
+    }
+
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onBlockPlace(BreakBlockEvent e) {
-        Object rootCause = e.getCause().getRootCause();
-
-        if(!(rootCause instanceof Player))
+    public void onBlockBreak(BreakBlockEvent e) {
+        if (!(e.getCause().getRootCause() instanceof Player player)) {
             return;
+        }
 
-        Player cause = (Player) rootCause;
-        for(Block b : e.getBlocks()) {
-            if(!WGUtils.canBuild(cause, b)) {
+        for (Block b : e.getBlocks()) {
+            if (!WGUtils.canBuild(player, b)) {
                 continue;
             }
+
             Material type = b.getType();
             ApplicableRegionSet regions = WGUtils.getApplicableRegions(b.getLocation());
+            Event.Result result = evaluateFlags(player, type, regions, FlagAction.BREAK);
 
-            // Check allow-blocks
-            Set<Material> materials = WGUtils.queryValue(cause, cause.getWorld(), regions.getRegions(), Flags.ALLOW_BLOCKS);
-            if (materials != null && (materials.contains(type) || materials.contains(Material.AIR))) {
-                if(e.getResult() == Event.Result.DEFAULT) {
+            if (result == Event.Result.ALLOW) {
+                if (e.getResult() == Event.Result.DEFAULT) {
                     e.setResult(Event.Result.ALLOW);
-                    return;
                 }
-            }
-
-            // Check deny-blocks
-            materials = WGUtils.queryValue(cause, cause.getWorld(), regions.getRegions(), Flags.DENY_BLOCKS);
-            if(materials != null && (materials.contains(type) || materials.contains(Material.AIR))) {
-                e.setResult(Event.Result.DENY);
                 return;
-            }
-
-            // Check allow-block-break
-            materials = WGUtils.queryValue(cause, cause.getWorld(), regions.getRegions(), Flags.ALLOW_BLOCK_BREAK);
-            if(materials != null && materials.contains(type)) {
-                e.setResult(Event.Result.ALLOW);
-                return;
-            }
-
-            // Check deny-block-break
-            materials = WGUtils.queryValue(cause, cause.getWorld(), regions.getRegions(), Flags.DENY_BLOCK_BREAK);
-            if(materials != null && (materials.contains(type) || materials.contains(Material.AIR))) {
+            } else if (result == Event.Result.DENY) {
                 e.setResult(Event.Result.DENY);
+                sendDenyMessage(player, type, FlagAction.BREAK);
                 return;
             }
         }

@@ -8,21 +8,21 @@ jobs:
 
     steps:
     - name: Checkout WGBlockFlags
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: WGBlockFlags
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '21'
     - name: Cache Maven packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.m2
-        key: ${{ runner.os }}-m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
         restore-keys: ${{ runner.os }}-m2
-    
+
     - name: Build with Maven
       run: mvn -B package -T 1C --file WGBlockFlags/pom.xml
 
@@ -31,7 +31,7 @@ jobs:
     - name: Rename jar
       run: mv staging/WGBlockFlags*.jar staging/WGBlockFlags_$GITHUB_SHA.jar
     - name: Upload jar
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: WGBlockFlags_Dev-Build
         path: staging/WGBlockFlags_*.jar

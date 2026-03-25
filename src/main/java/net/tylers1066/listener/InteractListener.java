@@ -1,6 +1,6 @@
 package net.tylers1066.listener;
 
-import com.sk89q.worldguard.bukkit.event.block.PlaceBlockEvent;
+import com.sk89q.worldguard.bukkit.event.block.UseBlockEvent;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
 import net.tylers1066.WGBlockFlags;
 import net.tylers1066.utils.WGUtils;
@@ -11,14 +11,14 @@ import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 
-public class PlaceListener extends AbstractBlockListener {
+public class InteractListener extends AbstractBlockListener {
 
-    public PlaceListener(WGBlockFlags plugin) {
+    public InteractListener(WGBlockFlags plugin) {
         super(plugin);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onBlockPlace(PlaceBlockEvent e) {
+    public void onBlockUse(UseBlockEvent e) {
         if (!(e.getCause().getRootCause() instanceof Player player)) {
             return;
         }
@@ -29,12 +29,8 @@ public class PlaceListener extends AbstractBlockListener {
             }
 
             Material type = b.getType();
-            if (type == Material.AIR) {
-                type = e.getEffectiveMaterial();
-            }
-
             ApplicableRegionSet regions = WGUtils.getApplicableRegions(b.getLocation());
-            Event.Result result = evaluateFlags(player, type, regions, FlagAction.PLACE);
+            Event.Result result = evaluateFlags(player, type, regions, FlagAction.INTERACT);
 
             if (result == Event.Result.ALLOW) {
                 if (e.getResult() == Event.Result.DEFAULT) {
@@ -43,7 +39,7 @@ public class PlaceListener extends AbstractBlockListener {
                 return;
             } else if (result == Event.Result.DENY) {
                 e.setResult(Event.Result.DENY);
-                sendDenyMessage(player, type, FlagAction.PLACE);
+                sendDenyMessage(player, type, FlagAction.INTERACT);
                 return;
             }
         }
