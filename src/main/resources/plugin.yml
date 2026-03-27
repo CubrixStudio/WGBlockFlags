@@ -3,7 +3,20 @@ version: ${project.version}
 main: net.tylers1066.WGBlockFlags
 prefix: WGBlockFlags
 depend: [ WorldGuard ]
-authors: [ TylerS1066 ]
-description: WorldGuard Block Flags
-website: https://github.com/TylerS1066/
-api-version: 1.14
+authors: [ TylerS1066, SharkBlack3D ]
+description: WorldGuard Block Flags - Granular block control for WorldGuard regions
+website: https://github.com/sharkblack3d/WGBlockFlags/
+api-version: '1.21'
+commands:
+  wgbf:
+    description: WGBlockFlags admin command
+    usage: /<command> [reload|info|help]
+    permission: wgblockflags.admin
+    aliases: [wgblockflags]
+permissions:
+  wgblockflags.admin:
+    description: Allows use of WGBlockFlags admin commands
+    default: op
+  wgblockflags.notify:
+    description: Receive debug notifications
+    default: op

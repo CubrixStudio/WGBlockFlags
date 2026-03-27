@@ -13,9 +13,9 @@ public class BlockMaterialFlag extends MaterialFlag {
     @Override
     public Material parseInput(FlagContext flagContext) throws InvalidFlagFormat {
         Material material = super.parseInput(flagContext);
-        if(!material.isBlock())
-            throw new InvalidFlagFormat("This material is not a placeable block!");
-
+        if (!material.isBlock()) {
+            throw new InvalidFlagFormat("'" + material.name() + "' is not a valid block material!");
+        }
         return material;
     }
 }
