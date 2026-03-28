@@ -22,12 +22,14 @@ public class FarmRegionCache {
      * @param autoGrow     whether auto-grow is active for this region
      * @param growInterval ticks between forced growth cycles
      * @param autoReplant  whether auto-replant is active for this region
+     * @param protectCrops whether non-mature crops are protected from breaking
      */
     public record FarmRegionData(
             Set<Material> crops,
             boolean autoGrow,
             int growInterval,
-            boolean autoReplant
+            boolean autoReplant,
+            boolean protectCrops
     ) {
         /** Returns true if the given material is managed by this farm region. */
         public boolean manages(Material material) {
@@ -82,6 +84,17 @@ public class FarmRegionCache {
         return entry != null ? entry.data() : null;
     }
 
+    /** Returns the total number of auto-grow regions across all worlds. */
+    public int getAutoGrowRegionCount() {
+        int count = 0;
+        for (Map<String, RegionEntry> worldCache : cache.values()) {
+            for (RegionEntry entry : worldCache.values()) {
+                if (entry.data().autoGrow()) count++;
+            }
+        }
+        return count;
+    }
+
     /**
      * Returns all farm region entries in the given world that have auto-grow active.
      * Used by the scheduler to determine which regions to scan when a chunk loads.
@@ -111,11 +124,13 @@ public class FarmRegionCache {
     private @Nullable FarmRegionData buildData(ProtectedRegion region, PluginConfig config) {
         StateFlag.State autoGrowState = region.getFlag(FarmFlags.FARM_AUTOGROW);
         StateFlag.State autoReplantState = region.getFlag(FarmFlags.FARM_AUTOREPLANT);
+        StateFlag.State protectState = region.getFlag(FarmFlags.FARM_PROTECT_CROPS);
 
         boolean autoGrow = autoGrowState == StateFlag.State.ALLOW;
         boolean autoReplant = autoReplantState == StateFlag.State.ALLOW;
+        boolean protectCrops = protectState == StateFlag.State.ALLOW;
 
-        if (!autoGrow && !autoReplant) {
+        if (!autoGrow && !autoReplant && !protectCrops) {
             return null;
         }
 
@@ -131,6 +146,6 @@ public class FarmRegionCache {
         Set<Material> crops = rawCrops != null ? Collections.unmodifiableSet(new HashSet<>(rawCrops))
                 : Collections.emptySet();
 
-        return new FarmRegionData(crops, autoGrow, interval, autoReplant);
+        return new FarmRegionData(crops, autoGrow, interval, autoReplant, protectCrops);
     }
 }
