@@ -38,3 +38,32 @@ farm:
   # If true, the normal item drops are suppressed when a crop is auto-replanted.
   # Prevents seed accumulation when auto-grow and auto-replant are both active.
   suppress-drops-on-replant: false
+
+# ============================================================
+# Mob Spawn Zone Management (requires MythicMobs 5.x)
+# ============================================================
+mob-spawn:
+  # Default ticks between spawn cycles in mob zones.
+  # 20 ticks = 1 second.  400 = 20 seconds.
+  # Per-region override: /rg flag <region> mob-spawn-interval <ticks>
+  spawn-interval: 400
+
+  # Default maximum concurrent mobs per zone before spawning is suppressed.
+  # Per-region override: /rg flag <region> mob-spawn-max <count>
+  max-mobs: 5
+
+  # Default number of mobs to attempt spawning per cycle.
+  # Per-region override: /rg flag <region> mob-spawn-count <count>
+  spawn-count: 1
+
+  # Default minimum mob level (inclusive).
+  # Per-region override: /rg flag <region> mob-spawn-level-min <level>
+  default-level-min: 1
+
+  # Default maximum mob level (inclusive).  Level is chosen randomly in [min, max].
+  # Per-region override: /rg flag <region> mob-spawn-level-max <level>
+  default-level-max: 1
+
+  # Number of random positions to try when searching for a safe spawn location.
+  # Increase if mobs frequently fail to spawn in regions with complex terrain.
+  spawn-attempts: 20

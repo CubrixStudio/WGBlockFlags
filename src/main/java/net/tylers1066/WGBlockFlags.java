@@ -10,6 +10,8 @@ import net.tylers1066.config.PluginConfig;
 import net.tylers1066.farm.FarmFlags;
 import net.tylers1066.farm.FarmModule;
 import net.tylers1066.flags.Flags;
+import net.tylers1066.mob.MobModule;
+import net.tylers1066.mob.MobSpawnFlags;
 import net.tylers1066.listener.BreakListener;
 import net.tylers1066.listener.InteractListener;
 import net.tylers1066.listener.PlaceListener;
@@ -20,6 +22,7 @@ public final class WGBlockFlags extends JavaPlugin {
     private static WGBlockFlags instance;
     private PluginConfig pluginConfig;
     private FarmModule farmModule;
+    private MobModule mobModule;
 
     @Override
     public void onLoad() {
@@ -39,6 +42,16 @@ public final class WGBlockFlags extends JavaPlugin {
         registerFlag(flagRegistry, FarmFlags.FARM_GROW_INTERVAL);
         registerFlag(flagRegistry, FarmFlags.FARM_AUTOREPLANT);
         registerFlag(flagRegistry, FarmFlags.FARM_CROPS);
+
+        // Mob spawn flags
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_AUTOSPAWN);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_MOBS);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_INTERVAL);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_MAX);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_COUNT);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_LEVEL_MIN);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_LEVEL_MAX);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_TIME);
     }
 
     @Override
@@ -59,14 +72,20 @@ public final class WGBlockFlags extends JavaPlugin {
         farmModule = new FarmModule(this);
         farmModule.enable();
 
+        mobModule = new MobModule(this);
+        mobModule.enable();
+
         getLogger().info("WGBlockFlags v" + getDescription().getVersion() + " enabled - "
-                + (Flags.count() + FarmFlags.count()) + " flags registered");
+                + (Flags.count() + FarmFlags.count() + MobSpawnFlags.count()) + " flags registered");
     }
 
     @Override
     public void onDisable() {
         if (farmModule != null) {
             farmModule.disable();
+        }
+        if (mobModule != null) {
+            mobModule.disable();
         }
         getLogger().info("WGBlockFlags disabled");
     }
@@ -85,10 +104,17 @@ public final class WGBlockFlags extends JavaPlugin {
         if (farmModule != null) {
             farmModule.reload();
         }
+        if (mobModule != null) {
+            mobModule.reload();
+        }
     }
 
     public FarmModule getFarmModule() {
         return farmModule;
+    }
+
+    public MobModule getMobModule() {
+        return mobModule;
     }
 
     private void registerFlag(FlagRegistry registry, Flag<?> flag) {
