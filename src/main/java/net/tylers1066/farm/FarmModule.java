@@ -38,8 +38,8 @@ public class FarmModule {
         // Scan all already-loaded chunks so crops in loaded regions are tracked immediately.
         scanLoadedChunks();
         plugin.getLogger().info("[FarmModule] Enabled — "
-                + cache.getAutoGrowRegionCount() + " auto-grow region(s), "
-                + scheduler.getTrackedCount() + " crop(s) tracked.");
+                + cache.getAutoGrowRegionCount() + " auto-grow region(s). "
+                + "Chunk scans queued (" + pendingScanCount() + " chunk(s)).");
     }
 
     /**
@@ -84,5 +84,9 @@ public class FarmModule {
                 scheduler.onChunkLoad(chunk);
             }
         }
+    }
+
+    private int pendingScanCount() {
+        return scheduler.getPendingScanCount();
     }
 }

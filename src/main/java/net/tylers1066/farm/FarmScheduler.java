@@ -8,27 +8,25 @@ import net.tylers1066.farm.FarmRegionCache.FarmRegionData;
 import net.tylers1066.farm.FarmRegionCache.RegionEntry;
 import net.tylers1066.utils.WGUtils;
 import org.bukkit.Chunk;
-import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
 
 import java.util.*;
 
 /**
  * Drives the auto-grow mechanic for farm regions.
  *
- * <p>Strategy — track-on-demand:
+ * <p>Strategy:
  * <ul>
- *   <li>When a chunk loads, any crop block inside a farm auto-grow region is added
- *       to the tracked set for its chunk.</li>
- *   <li>When a chunk unloads, all tracked blocks for that chunk are removed.</li>
- *   <li>A single BukkitScheduler task fires every tick.  For each tracked block
- *       it checks whether the per-block timer has elapsed; if so it advances growth
- *       by one stage and resets the timer.</li>
+ *   <li>When a chunk loads it is <em>queued</em> for scanning — the actual block scan
+ *       is spread over multiple ticks (see {@link #SCANS_PER_TICK}) so reloading a
+ *       server with many loaded chunks never freezes the main thread.</li>
+ *   <li>Tracked crop blocks are stored in a per-world {@link TreeMap} keyed by their
+ *       next scheduled grow tick.  The repeating task only processes entries whose time
+ *       has come, giving O(k log n) per tick where k is the number of blocks growing
+ *       this tick (usually very small).</li>
+ *   <li>Chunk-unload tracking is maintained separately for O(1) cleanup.</li>
  * </ul>
- * Performance: the per-tick work is proportional to the number of tracked crop
- * blocks.  Only loaded chunks are ever processed — unloaded chunks are skipped.
  */
 public class FarmScheduler {
 
@@ -40,22 +38,32 @@ public class FarmScheduler {
         return ((long) chunkX & 0xFFFFFFFFL) | ((long) chunkZ << 32);
     }
 
+    /** Maximum number of chunks to scan per tick from the pending queue. */
+    private static final int SCANS_PER_TICK = 3;
+
     private final WGBlockFlags plugin;
     private final FarmRegionCache cache;
 
-    /**
-     * Tracked crops, indexed by world then by chunk key.
-     * Only blocks whose chunk is loaded at a given tick are processed.
-     */
-    private final Map<World, Map<Long, Set<BlockPos>>> trackedByChunk = new HashMap<>();
+    /** Chunk-unload cleanup: World → chunkKey → tracked positions in that chunk. */
+    private final Map<World, Map<Long, Set<BlockPos>>> chunkTracking = new HashMap<>();
 
-    /** Cached grow interval (ticks) per block, computed at track time. */
+    /** Per-block grow interval (ticks). */
     private final Map<BlockPos, Integer> growIntervals = new HashMap<>();
 
-    /** WorldGuard full-time tick at which each block last grew. */
-    private final Map<BlockPos, Long> lastGrowTick = new HashMap<>();
+    /** The tick at which each block is next scheduled to grow (mirrors its key in growQueues). */
+    private final Map<BlockPos, Long> nextGrowTick = new HashMap<>();
+
+    /**
+     * Priority grow queue per world: nextGrowTick → set of block positions due at that tick.
+     * Only entries whose key ≤ currentTick are processed each tick.
+     */
+    private final Map<World, TreeMap<Long, Set<BlockPos>>> growQueues = new HashMap<>();
+
+    /** Chunks queued for scanning; processed SCANS_PER_TICK entries per tick. */
+    private final Queue<Chunk> pendingScans = new ArrayDeque<>();
 
     private int taskId = -1;
+    private long debugTickCounter = 0;
 
     public FarmScheduler(WGBlockFlags plugin, FarmRegionCache cache) {
         this.plugin = plugin;
@@ -66,33 +74,32 @@ public class FarmScheduler {
     // Lifecycle
     // -------------------------------------------------------------------------
 
-    /** Starts the repeating scheduler task. */
     public void start() {
         taskId = plugin.getServer().getScheduler()
                 .scheduleSyncRepeatingTask(plugin, this::tick, 0L, 1L);
         debug("Scheduler started (taskId=" + taskId + ")");
     }
 
-    /** Returns the total number of crop blocks currently tracked across all worlds. */
+    /** Returns the total number of crop blocks currently tracked. */
     public int getTrackedCount() {
-        int count = 0;
-        for (Map<Long, Set<BlockPos>> worldMap : trackedByChunk.values()) {
-            for (Set<BlockPos> chunkSet : worldMap.values()) {
-                count += chunkSet.size();
-            }
-        }
-        return count;
+        return growIntervals.size();
     }
 
-    /** Stops the task and clears all tracking state. */
+    /** Returns the number of chunks still waiting to be scanned. */
+    public int getPendingScanCount() {
+        return pendingScans.size();
+    }
+
     public void stop() {
         if (taskId != -1) {
             plugin.getServer().getScheduler().cancelTask(taskId);
             taskId = -1;
         }
-        trackedByChunk.clear();
+        chunkTracking.clear();
         growIntervals.clear();
-        lastGrowTick.clear();
+        nextGrowTick.clear();
+        growQueues.clear();
+        pendingScans.clear();
     }
 
     // -------------------------------------------------------------------------
@@ -100,101 +107,44 @@ public class FarmScheduler {
     // -------------------------------------------------------------------------
 
     /**
-     * Scans a newly loaded chunk and registers any farm crop blocks found inside
-     * auto-grow regions that overlap the chunk.
+     * Queues a chunk for scanning.  Returns immediately — the actual block scan
+     * happens asynchronously over the next few ticks.
      */
     public void onChunkLoad(Chunk chunk) {
-        World world = chunk.getWorld();
-        List<RegionEntry> autoGrowEntries = cache.getAutoGrowEntries(world.getName());
-        if (autoGrowEntries.isEmpty()) {
-            return;
-        }
-
-        int chunkMinX = chunk.getX() * 16;
-        int chunkMaxX = chunkMinX + 15;
-        int chunkMinZ = chunk.getZ() * 16;
-        int chunkMaxZ = chunkMinZ + 15;
-
-        int foundCount = 0;
-        for (RegionEntry entry : autoGrowEntries) {
-            ProtectedRegion region = entry.region();
-            FarmRegionData data = entry.data();
-
-            BlockVector3 min = region.getMinimumPoint();
-            BlockVector3 max = region.getMaximumPoint();
-
-            // Quick bounding-box overlap check
-            if (max.x() < chunkMinX || min.x() > chunkMaxX
-                    || max.z() < chunkMinZ || min.z() > chunkMaxZ) {
-                continue;
-            }
-
-            int scanMinX = Math.max(min.x(), chunkMinX);
-            int scanMaxX = Math.min(max.x(), chunkMaxX);
-            int scanMinZ = Math.max(min.z(), chunkMinZ);
-            int scanMaxZ = Math.min(max.z(), chunkMaxZ);
-            int scanMinY = min.y();
-            int scanMaxY = max.y();
-
-            for (int x = scanMinX; x <= scanMaxX; x++) {
-                for (int z = scanMinZ; z <= scanMaxZ; z++) {
-                    for (int y = scanMinY; y <= scanMaxY; y++) {
-                        if (!region.contains(x, y, z)) {
-                            continue;
-                        }
-                        Block block = world.getBlockAt(x, y, z);
-                        if (!CropUtils.isCrop(block)) {
-                            continue;
-                        }
-                        // For vertical crops only track the bottom of the column
-                        if (CropUtils.isVerticalCrop(block.getType())
-                                && !CropUtils.isVerticalCropBottom(block)) {
-                            continue;
-                        }
-                        // Apply farm-crops filter
-                        if (!data.manages(block.getType())) {
-                            continue;
-                        }
-                        trackBlock(block, data.growInterval());
-                        foundCount++;
-                    }
-                }
-            }
-        }
-        if (foundCount > 0) {
-            debug("ChunkLoad " + world.getName() + " [" + chunk.getX() + "," + chunk.getZ()
-                    + "] → tracked " + foundCount + " crop(s)");
+        if (!cache.getAutoGrowEntries(chunk.getWorld().getName()).isEmpty()) {
+            pendingScans.add(chunk);
         }
     }
 
     /** Removes all tracked blocks that belong to the unloaded chunk. */
     public void onChunkUnload(Chunk chunk) {
         World world = chunk.getWorld();
-        Map<Long, Set<BlockPos>> worldMap = trackedByChunk.get(world);
-        if (worldMap == null) {
-            return;
-        }
+        Map<Long, Set<BlockPos>> worldMap = chunkTracking.get(world);
+        if (worldMap == null) return;
+
         long key = chunkKey(chunk.getX(), chunk.getZ());
         Set<BlockPos> removed = worldMap.remove(key);
         if (removed != null) {
+            TreeMap<Long, Set<BlockPos>> queue = growQueues.get(world);
             for (BlockPos pos : removed) {
+                Long scheduled = nextGrowTick.remove(pos);
+                if (scheduled != null && queue != null) {
+                    Set<BlockPos> set = queue.get(scheduled);
+                    if (set != null) set.remove(pos);
+                }
                 growIntervals.remove(pos);
-                lastGrowTick.remove(pos);
             }
         }
-        if (worldMap.isEmpty()) {
-            trackedByChunk.remove(world);
-        }
+        if (worldMap.isEmpty()) chunkTracking.remove(world);
     }
 
     // -------------------------------------------------------------------------
-    // Block tracking (called from FarmBreakListener for replanted crops)
+    // Block tracking (called from FarmBreakListener for replanted / placed crops)
     // -------------------------------------------------------------------------
 
     /**
      * Registers a crop block for auto-grow only if it is inside an active
      * {@code farm-autogrow} region that manages its material type.
-     * Does nothing if no such region covers the block.
      */
     public void trackBlock(Block block) {
         ApplicableRegionSet regions = WGUtils.getApplicableRegions(block.getLocation());
@@ -212,88 +162,103 @@ public class FarmScheduler {
                         + ", manages=" + data.manages(block.getType()) + ")");
             }
         }
-        debug("No auto-grow region for " + block.getType() + " at " + block.getX() + "," + block.getY() + "," + block.getZ());
+        debug("No auto-grow region for " + block.getType() + " at "
+                + block.getX() + "," + block.getY() + "," + block.getZ());
     }
 
     /** Removes a crop block from the tracked set (e.g. after it is broken). */
     public void untrackBlock(Block block) {
         BlockPos pos = posOf(block);
-        long key = chunkKey(block.getX() >> 4, block.getZ() >> 4);
-        Map<Long, Set<BlockPos>> worldMap = trackedByChunk.get(block.getWorld());
-        if (worldMap != null) {
-            Set<BlockPos> chunk = worldMap.get(key);
-            if (chunk != null) {
-                chunk.remove(pos);
+        World world = block.getWorld();
+
+        Long scheduled = nextGrowTick.remove(pos);
+        if (scheduled != null) {
+            TreeMap<Long, Set<BlockPos>> queue = growQueues.get(world);
+            if (queue != null) {
+                Set<BlockPos> set = queue.get(scheduled);
+                if (set != null) set.remove(pos);
             }
         }
         growIntervals.remove(pos);
-        lastGrowTick.remove(pos);
+
+        long chunkKeyVal = chunkKey(block.getX() >> 4, block.getZ() >> 4);
+        Map<Long, Set<BlockPos>> worldMap = chunkTracking.get(world);
+        if (worldMap != null) {
+            Set<BlockPos> chunkSet = worldMap.get(chunkKeyVal);
+            if (chunkSet != null) chunkSet.remove(pos);
+        }
     }
 
     // -------------------------------------------------------------------------
     // Tick
     // -------------------------------------------------------------------------
 
-    private long debugTickCounter = 0;
-
     private void tick() {
         debugTickCounter++;
-        boolean doDebug = plugin.getPluginConfig().isDebug() && debugTickCounter % 200 == 0;
-        if (doDebug) {
-            debug("Tick #" + debugTickCounter + " — tracking " + getTrackedCount() + " blocks across "
-                    + trackedByChunk.size() + " world(s)");
+
+        // 1. Process pending chunk scans in small batches to avoid freezing.
+        int scanned = 0;
+        while (!pendingScans.isEmpty() && scanned < SCANS_PER_TICK) {
+            Chunk chunk = pendingScans.poll();
+            if (chunk != null && chunk.isLoaded()) {
+                doScanChunk(chunk);
+                scanned++;
+            }
         }
 
-        for (Map.Entry<World, Map<Long, Set<BlockPos>>> worldEntry : trackedByChunk.entrySet()) {
+        // 2. Process only blocks whose scheduled grow tick has arrived.
+        for (Map.Entry<World, TreeMap<Long, Set<BlockPos>>> worldEntry : growQueues.entrySet()) {
             World world = worldEntry.getKey();
             long currentTick = world.getFullTime();
+            TreeMap<Long, Set<BlockPos>> queue = worldEntry.getValue();
 
-            for (Map.Entry<Long, Set<BlockPos>> chunkEntry : worldEntry.getValue().entrySet()) {
-                long chunkKey = chunkEntry.getKey();
-                int chunkX = (int) (chunkKey & 0xFFFFFFFFL);
-                int chunkZ = (int) (chunkKey >> 32);
+            // headMap(currentTick, inclusive=true) → all entries with key ≤ currentTick
+            NavigableMap<Long, Set<BlockPos>> due = queue.headMap(currentTick, true);
+            if (due.isEmpty()) continue;
 
-                if (!world.isChunkLoaded(chunkX, chunkZ)) {
-                    continue;
-                }
+            // Copy to list before clearing to avoid ConcurrentModificationException.
+            List<Map.Entry<Long, Set<BlockPos>>> batch = new ArrayList<>(due.entrySet());
+            due.clear(); // removes processed entries from the underlying TreeMap
 
-                Set<BlockPos> positions = chunkEntry.getValue();
-                Iterator<BlockPos> iter = positions.iterator();
-                while (iter.hasNext()) {
-                    BlockPos pos = iter.next();
-                    Block block = world.getBlockAt(pos.x(), pos.y(), pos.z());
-
-                    // Clean up stale entries (block was broken without a break event, physics, etc.)
-                    if (!CropUtils.isCrop(block)) {
-                        iter.remove();
-                        growIntervals.remove(pos);
-                        lastGrowTick.remove(pos);
-                        continue;
-                    }
-
-                    // Skip fully-grown Ageable crops — they are ready for harvest
-                    if (CropUtils.isFullyGrown(block)) {
-                        continue;
-                    }
+            for (Map.Entry<Long, Set<BlockPos>> entry : batch) {
+                for (BlockPos pos : entry.getValue()) {
+                    nextGrowTick.remove(pos);
 
                     int interval = growIntervals.getOrDefault(pos,
                             plugin.getPluginConfig().getGlobalGrowInterval());
-                    long lastTick = lastGrowTick.getOrDefault(pos, 0L);
-                    long elapsed = currentTick - lastTick;
+                    Block block = world.getBlockAt(pos.x(), pos.y(), pos.z());
 
-                    if (doDebug) {
-                        debug("  " + block.getType() + " at " + pos.x() + "," + pos.y() + "," + pos.z()
-                                + " elapsed=" + elapsed + "/" + interval);
+                    // Clean up stale entries (block broken without an event, physics, etc.)
+                    if (!CropUtils.isCrop(block)) {
+                        growIntervals.remove(pos);
+                        removeFromChunkTracking(world, pos);
+                        continue;
                     }
 
-                    if (elapsed >= interval) {
-                        debug("Growing " + block.getType() + " at " + pos.x() + "," + pos.y() + "," + pos.z()
-                                + " (elapsed=" + elapsed + ", interval=" + interval + ")");
+                    if (!CropUtils.isFullyGrown(block)) {
+                        debug("Growing " + block.getType() + " at "
+                                + pos.x() + "," + pos.y() + "," + pos.z());
                         CropUtils.advanceGrowth(block);
-                        lastGrowTick.put(pos, currentTick);
+                    }
+
+                    if (CropUtils.isFullyGrown(block)) {
+                        // Fully grown — no need to keep tracking.
+                        // The replant handler will re-track the block after harvest.
+                        growIntervals.remove(pos);
+                        removeFromChunkTracking(world, pos);
+                    } else {
+                        // Schedule next grow cycle.
+                        long nextTick = currentTick + interval;
+                        nextGrowTick.put(pos, nextTick);
+                        queue.computeIfAbsent(nextTick, k -> new HashSet<>()).add(pos);
                     }
                 }
             }
+        }
+
+        if (plugin.getPluginConfig().isDebug() && debugTickCounter % 200 == 0) {
+            debug("Tick #" + debugTickCounter + " — tracking " + getTrackedCount()
+                    + " block(s), " + pendingScans.size() + " chunk(s) pending scan");
         }
     }
 
@@ -301,16 +266,89 @@ public class FarmScheduler {
     // Private helpers
     // -------------------------------------------------------------------------
 
+    /** Performs the actual block scan for a single chunk. */
+    private void doScanChunk(Chunk chunk) {
+        World world = chunk.getWorld();
+        List<RegionEntry> autoGrowEntries = cache.getAutoGrowEntries(world.getName());
+
+        int chunkMinX = chunk.getX() * 16;
+        int chunkMaxX = chunkMinX + 15;
+        int chunkMinZ = chunk.getZ() * 16;
+        int chunkMaxZ = chunkMinZ + 15;
+
+        int foundCount = 0;
+        for (RegionEntry entry : autoGrowEntries) {
+            ProtectedRegion region = entry.region();
+            FarmRegionData data = entry.data();
+
+            BlockVector3 min = region.getMinimumPoint();
+            BlockVector3 max = region.getMaximumPoint();
+
+            if (max.x() < chunkMinX || min.x() > chunkMaxX
+                    || max.z() < chunkMinZ || min.z() > chunkMaxZ) {
+                continue;
+            }
+
+            int scanMinX = Math.max(min.x(), chunkMinX);
+            int scanMaxX = Math.min(max.x(), chunkMaxX);
+            int scanMinZ = Math.max(min.z(), chunkMinZ);
+            int scanMaxZ = Math.min(max.z(), chunkMaxZ);
+
+            for (int x = scanMinX; x <= scanMaxX; x++) {
+                for (int z = scanMinZ; z <= scanMaxZ; z++) {
+                    for (int y = min.y(); y <= max.y(); y++) {
+                        if (!region.contains(x, y, z)) continue;
+                        Block block = world.getBlockAt(x, y, z);
+                        if (!CropUtils.isCrop(block)) continue;
+                        if (CropUtils.isVerticalCrop(block.getType())
+                                && !CropUtils.isVerticalCropBottom(block)) continue;
+                        if (!data.manages(block.getType())) continue;
+                        trackBlock(block, data.growInterval());
+                        foundCount++;
+                    }
+                }
+            }
+        }
+        if (foundCount > 0) {
+            debug("Scanned chunk " + world.getName() + " [" + chunk.getX() + "," + chunk.getZ()
+                    + "] → tracked " + foundCount + " crop(s)");
+        }
+    }
+
+    /**
+     * Registers a crop block with an explicit interval.
+     * No-ops if the block is already tracked (prevents double-scheduling).
+     */
     private void trackBlock(Block block, int interval) {
         BlockPos pos = posOf(block);
-        long key = chunkKey(block.getX() >> 4, block.getZ() >> 4);
-        trackedByChunk
-                .computeIfAbsent(block.getWorld(), w -> new HashMap<>())
-                .computeIfAbsent(key, k -> new HashSet<>())
-                .add(pos);
+        if (nextGrowTick.containsKey(pos)) {
+            return; // Already scheduled — skip to avoid duplicate queue entries.
+        }
+
+        World world = block.getWorld();
+
+        // Chunk-unload tracking
+        long chunkKeyVal = chunkKey(block.getX() >> 4, block.getZ() >> 4);
+        chunkTracking.computeIfAbsent(world, w -> new HashMap<>())
+                     .computeIfAbsent(chunkKeyVal, k -> new HashSet<>())
+                     .add(pos);
+
+        // Priority grow queue
         growIntervals.put(pos, interval);
-        // Initialise the timer so the first grow happens after one full interval.
-        lastGrowTick.putIfAbsent(pos, block.getWorld().getFullTime());
+        long nextTick = world.getFullTime() + interval;
+        nextGrowTick.put(pos, nextTick);
+        growQueues.computeIfAbsent(world, w -> new TreeMap<>())
+                  .computeIfAbsent(nextTick, t -> new HashSet<>())
+                  .add(pos);
+    }
+
+    private void removeFromChunkTracking(World world, BlockPos pos) {
+        long chunkKeyVal = chunkKey(pos.x() >> 4, pos.z() >> 4);
+        Map<Long, Set<BlockPos>> worldMap = chunkTracking.get(world);
+        if (worldMap != null) {
+            Set<BlockPos> set = worldMap.get(chunkKeyVal);
+            if (set != null) set.remove(pos);
+        }
     }
 
     private static BlockPos posOf(Block block) {
