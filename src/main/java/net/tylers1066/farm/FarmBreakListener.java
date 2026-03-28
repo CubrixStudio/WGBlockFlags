@@ -36,6 +36,44 @@ public class FarmBreakListener implements Listener {
     }
 
     // -------------------------------------------------------------------------
+    // Crop break protection
+    // -------------------------------------------------------------------------
+
+    /**
+     * Prevents players from breaking non-mature crops inside regions that have
+     * {@code farm-protect-crops=allow}.  Fires at NORMAL priority so it runs
+     * before protection plugins that run at HIGH/HIGHEST, and before the
+     * auto-replant handler at MONITOR.
+     */
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onBlockBreakProtect(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        Material type = block.getType();
+
+        if (!CropUtils.isCrop(block)) {
+            return;
+        }
+        // Fully-grown crops may always be harvested.
+        if (CropUtils.isFullyGrown(block)) {
+            return;
+        }
+
+        ApplicableRegionSet regions = WGUtils.getApplicableRegions(block.getLocation());
+        for (ProtectedRegion region : regions.getRegions()) {
+            FarmRegionData data = cache.getData(block.getWorld().getName(), region.getId());
+            if (data != null && data.protectCrops() && data.manages(type)) {
+                event.setCancelled(true);
+                if (event.getPlayer() != null) {
+                    event.getPlayer().sendMessage(
+                            net.kyori.adventure.text.Component.text(
+                                    "§cVous ne pouvez pas casser une plantation qui n'est pas encore mûre."));
+                }
+                return;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Auto-replant
     // -------------------------------------------------------------------------
 

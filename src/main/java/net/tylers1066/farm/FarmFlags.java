@@ -36,8 +36,15 @@ public class FarmFlags {
      */
     public static final SetFlag<Material> FARM_CROPS = new SetFlag<>("farm-crops", new BlockMaterialFlag(null));
 
+    /**
+     * Protects non-mature crops from being broken by players.
+     * When set to {@code allow}, players can only harvest fully-grown crops.
+     * Usage: {@code /rg flag <region> farm-protect-crops allow}
+     */
+    public static final StateFlag FARM_PROTECT_CROPS = new StateFlag("farm-protect-crops", false);
+
     public static int count() {
-        return 4;
+        return 5;
     }
 
     private FarmFlags() {}

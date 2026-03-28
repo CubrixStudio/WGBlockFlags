@@ -42,6 +42,7 @@ public final class WGBlockFlags extends JavaPlugin {
         registerFlag(flagRegistry, FarmFlags.FARM_GROW_INTERVAL);
         registerFlag(flagRegistry, FarmFlags.FARM_AUTOREPLANT);
         registerFlag(flagRegistry, FarmFlags.FARM_CROPS);
+        registerFlag(flagRegistry, FarmFlags.FARM_PROTECT_CROPS);
 
         // Mob spawn flags
         registerFlag(flagRegistry, MobSpawnFlags.MOB_AUTOSPAWN);

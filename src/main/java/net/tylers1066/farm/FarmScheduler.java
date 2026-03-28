@@ -70,6 +70,18 @@ public class FarmScheduler {
     public void start() {
         taskId = plugin.getServer().getScheduler()
                 .scheduleSyncRepeatingTask(plugin, this::tick, 0L, 1L);
+        debug("Scheduler started (taskId=" + taskId + ")");
+    }
+
+    /** Returns the total number of crop blocks currently tracked across all worlds. */
+    public int getTrackedCount() {
+        int count = 0;
+        for (Map<Long, Set<BlockPos>> worldMap : trackedByChunk.values()) {
+            for (Set<BlockPos> chunkSet : worldMap.values()) {
+                count += chunkSet.size();
+            }
+        }
+        return count;
     }
 
     /** Stops the task and clears all tracking state. */
@@ -103,6 +115,7 @@ public class FarmScheduler {
         int chunkMinZ = chunk.getZ() * 16;
         int chunkMaxZ = chunkMinZ + 15;
 
+        int foundCount = 0;
         for (RegionEntry entry : autoGrowEntries) {
             ProtectedRegion region = entry.region();
             FarmRegionData data = entry.data();
@@ -143,9 +156,14 @@ public class FarmScheduler {
                             continue;
                         }
                         trackBlock(block, data.growInterval());
+                        foundCount++;
                     }
                 }
             }
+        }
+        if (foundCount > 0) {
+            debug("ChunkLoad " + world.getName() + " [" + chunk.getX() + "," + chunk.getZ()
+                    + "] → tracked " + foundCount + " crop(s)");
         }
     }
 
@@ -184,10 +202,17 @@ public class FarmScheduler {
             FarmRegionData data = cache.getData(block.getWorld().getName(), region.getId());
             if (data != null && data.autoGrow() && data.manages(block.getType())) {
                 trackBlock(block, data.growInterval());
+                debug("Tracked " + block.getType() + " at " + block.getX() + "," + block.getY() + "," + block.getZ()
+                        + " (region=" + region.getId() + ", interval=" + data.growInterval() + ")");
                 return;
             }
+            if (data != null) {
+                debug("Skip track " + block.getType() + " at " + block.getX() + "," + block.getY() + "," + block.getZ()
+                        + " (region=" + region.getId() + ", autoGrow=" + data.autoGrow()
+                        + ", manages=" + data.manages(block.getType()) + ")");
+            }
         }
-        // Block is not inside any auto-grow region — do not track.
+        debug("No auto-grow region for " + block.getType() + " at " + block.getX() + "," + block.getY() + "," + block.getZ());
     }
 
     /** Removes a crop block from the tracked set (e.g. after it is broken). */
@@ -209,7 +234,16 @@ public class FarmScheduler {
     // Tick
     // -------------------------------------------------------------------------
 
+    private long debugTickCounter = 0;
+
     private void tick() {
+        debugTickCounter++;
+        boolean doDebug = plugin.getPluginConfig().isDebug() && debugTickCounter % 200 == 0;
+        if (doDebug) {
+            debug("Tick #" + debugTickCounter + " — tracking " + getTrackedCount() + " blocks across "
+                    + trackedByChunk.size() + " world(s)");
+        }
+
         for (Map.Entry<World, Map<Long, Set<BlockPos>>> worldEntry : trackedByChunk.entrySet()) {
             World world = worldEntry.getKey();
             long currentTick = world.getFullTime();
@@ -245,8 +279,16 @@ public class FarmScheduler {
                     int interval = growIntervals.getOrDefault(pos,
                             plugin.getPluginConfig().getGlobalGrowInterval());
                     long lastTick = lastGrowTick.getOrDefault(pos, 0L);
+                    long elapsed = currentTick - lastTick;
 
-                    if (currentTick - lastTick >= interval) {
+                    if (doDebug) {
+                        debug("  " + block.getType() + " at " + pos.x() + "," + pos.y() + "," + pos.z()
+                                + " elapsed=" + elapsed + "/" + interval);
+                    }
+
+                    if (elapsed >= interval) {
+                        debug("Growing " + block.getType() + " at " + pos.x() + "," + pos.y() + "," + pos.z()
+                                + " (elapsed=" + elapsed + ", interval=" + interval + ")");
                         CropUtils.advanceGrowth(block);
                         lastGrowTick.put(pos, currentTick);
                     }
@@ -273,5 +315,11 @@ public class FarmScheduler {
 
     private static BlockPos posOf(Block block) {
         return new BlockPos(block.getWorld().getName(), block.getX(), block.getY(), block.getZ());
+    }
+
+    private void debug(String msg) {
+        if (plugin.getPluginConfig().isDebug()) {
+            plugin.getLogger().info("[FarmDebug] " + msg);
+        }
     }
 }
