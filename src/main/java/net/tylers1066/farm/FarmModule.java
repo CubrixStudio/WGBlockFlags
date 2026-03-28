@@ -1,9 +1,6 @@
 package net.tylers1066.farm;
 
 import net.tylers1066.WGBlockFlags;
-import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.World;
 import org.bukkit.event.HandlerList;
 
 /**
@@ -35,11 +32,10 @@ public class FarmModule {
         listener = new FarmBreakListener(plugin, cache, scheduler);
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
         scheduler.start();
-        // Scan all already-loaded chunks so crops in loaded regions are tracked immediately.
-        scanLoadedChunks();
+        scheduler.queueLoadedChunksInRegions();
         plugin.getLogger().info("[FarmModule] Enabled — "
                 + cache.getAutoGrowRegionCount() + " auto-grow region(s). "
-                + "Chunk scans queued (" + pendingScanCount() + " chunk(s)).");
+                + "Chunk scans queued (" + scheduler.getPendingScanCount() + " chunk(s)).");
     }
 
     /**
@@ -62,7 +58,7 @@ public class FarmModule {
         scheduler.stop();
         cache.rebuild(plugin.getPluginConfig());
         scheduler.start();
-        scanLoadedChunks();
+        scheduler.queueLoadedChunksInRegions();
     }
 
     public FarmRegionCache getCache() {
@@ -73,20 +69,4 @@ public class FarmModule {
         return scheduler;
     }
 
-    // -------------------------------------------------------------------------
-    // Private helpers
-    // -------------------------------------------------------------------------
-
-    /** Scans every loaded chunk in every world so crops are tracked from the start. */
-    private void scanLoadedChunks() {
-        for (World world : Bukkit.getWorlds()) {
-            for (Chunk chunk : world.getLoadedChunks()) {
-                scheduler.onChunkLoad(chunk);
-            }
-        }
-    }
-
-    private int pendingScanCount() {
-        return scheduler.getPendingScanCount();
-    }
 }
