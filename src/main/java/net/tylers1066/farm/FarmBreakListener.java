@@ -62,6 +62,11 @@ public class FarmBreakListener implements Listener {
         for (ProtectedRegion region : regions.getRegions()) {
             FarmRegionData data = cache.getData(block.getWorld().getName(), region.getId());
             if (data != null && data.protectCrops() && data.manages(type)) {
+                // Players with the bypass permission can always harvest immature crops.
+                if (event.getPlayer() != null
+                        && event.getPlayer().hasPermission("wgblockflags.farm.harvest")) {
+                    return;
+                }
                 event.setCancelled(true);
                 if (event.getPlayer() != null) {
                     event.getPlayer().sendMessage(
