@@ -173,10 +173,21 @@ public class FarmScheduler {
     // Block tracking (called from FarmBreakListener for replanted crops)
     // -------------------------------------------------------------------------
 
-    /** Registers a crop block so the scheduler will grow it. */
+    /**
+     * Registers a crop block for auto-grow only if it is inside an active
+     * {@code farm-autogrow} region that manages its material type.
+     * Does nothing if no such region covers the block.
+     */
     public void trackBlock(Block block) {
-        int interval = resolveGrowInterval(block);
-        trackBlock(block, interval);
+        ApplicableRegionSet regions = WGUtils.getApplicableRegions(block.getLocation());
+        for (ProtectedRegion region : regions.getRegions()) {
+            FarmRegionData data = cache.getData(block.getWorld().getName(), region.getId());
+            if (data != null && data.autoGrow() && data.manages(block.getType())) {
+                trackBlock(block, data.growInterval());
+                return;
+            }
+        }
+        // Block is not inside any auto-grow region — do not track.
     }
 
     /** Removes a crop block from the tracked set (e.g. after it is broken). */
@@ -258,21 +269,6 @@ public class FarmScheduler {
         growIntervals.put(pos, interval);
         // Initialise the timer so the first grow happens after one full interval.
         lastGrowTick.putIfAbsent(pos, block.getWorld().getFullTime());
-    }
-
-    /**
-     * Resolves the grow interval for a block by querying the applicable WG regions
-     * from the cache.  Falls back to the global config default if no farm region is found.
-     */
-    private int resolveGrowInterval(Block block) {
-        ApplicableRegionSet regions = WGUtils.getApplicableRegions(block.getLocation());
-        for (ProtectedRegion region : regions.getRegions()) {
-            FarmRegionData data = cache.getData(block.getWorld().getName(), region.getId());
-            if (data != null && data.autoGrow()) {
-                return data.growInterval();
-            }
-        }
-        return plugin.getPluginConfig().getGlobalGrowInterval();
     }
 
     private static BlockPos posOf(Block block) {

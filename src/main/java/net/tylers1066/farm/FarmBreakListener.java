@@ -12,6 +12,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 
@@ -85,6 +86,29 @@ public class FarmBreakListener implements Listener {
             CropUtils.replant(target, cropType);
             scheduler.trackBlock(target);
         }, 1L);
+    }
+
+    // -------------------------------------------------------------------------
+    // Block-place → start tracking immediately (chunk may already be loaded)
+    // -------------------------------------------------------------------------
+
+    /**
+     * When a player plants a crop in an already-loaded chunk the {@code ChunkLoadEvent}
+     * never fires for that chunk again, so the new block would not be picked up by the
+     * scheduler until the chunk reloads.  This handler closes that gap by tracking the
+     * newly placed crop right away if it falls inside an auto-grow region.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Block block = event.getBlockPlaced();
+        if (!CropUtils.isCrop(block)) {
+            return;
+        }
+        // For vertical crops only track the base of the column.
+        if (CropUtils.isVerticalCrop(block.getType()) && !CropUtils.isVerticalCropBottom(block)) {
+            return;
+        }
+        scheduler.trackBlock(block);
     }
 
     // -------------------------------------------------------------------------

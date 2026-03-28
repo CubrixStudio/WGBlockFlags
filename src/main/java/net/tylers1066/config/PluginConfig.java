@@ -19,6 +19,14 @@ public class PluginConfig {
     private final boolean replantOnlyMature;
     private final boolean suppressDropsOnReplant;
 
+    // Mob spawn settings
+    private final int mobSpawnInterval;
+    private final int mobSpawnMax;
+    private final int mobSpawnCount;
+    private final int mobDefaultLevelMin;
+    private final int mobDefaultLevelMax;
+    private final int mobSpawnAttempts;
+
     public PluginConfig(JavaPlugin plugin) {
         FileConfiguration config = plugin.getConfig();
         this.denyPlaceMessage = config.getString("messages.deny-place",
@@ -34,6 +42,13 @@ public class PluginConfig {
         this.minGrowInterval = config.getInt("farm.min-grow-interval", 20);
         this.replantOnlyMature = config.getBoolean("farm.replant-only-mature", true);
         this.suppressDropsOnReplant = config.getBoolean("farm.suppress-drops-on-replant", false);
+
+        this.mobSpawnInterval = config.getInt("mob-spawn.spawn-interval", 400);
+        this.mobSpawnMax = config.getInt("mob-spawn.max-mobs", 5);
+        this.mobSpawnCount = config.getInt("mob-spawn.spawn-count", 1);
+        this.mobDefaultLevelMin = config.getInt("mob-spawn.default-level-min", 1);
+        this.mobDefaultLevelMax = config.getInt("mob-spawn.default-level-max", 1);
+        this.mobSpawnAttempts = config.getInt("mob-spawn.spawn-attempts", 20);
     }
 
     public Component getDenyPlaceMessage(Material block) {
@@ -70,6 +85,30 @@ public class PluginConfig {
 
     public boolean isSuppressDropsOnReplant() {
         return suppressDropsOnReplant;
+    }
+
+    public int getMobSpawnInterval() {
+        return mobSpawnInterval;
+    }
+
+    public int getMobSpawnMax() {
+        return mobSpawnMax;
+    }
+
+    public int getMobSpawnCount() {
+        return mobSpawnCount;
+    }
+
+    public int getMobDefaultLevelMin() {
+        return mobDefaultLevelMin;
+    }
+
+    public int getMobDefaultLevelMax() {
+        return mobDefaultLevelMax;
+    }
+
+    public int getMobSpawnAttempts() {
+        return mobSpawnAttempts;
     }
 
     private Component formatMessage(String message, Material block) {

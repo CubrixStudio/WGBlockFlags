@@ -3,6 +3,7 @@ version: ${project.version}
 main: net.tylers1066.WGBlockFlags
 prefix: WGBlockFlags
 depend: [ WorldGuard ]
+softdepend: [ MythicMobs ]
 authors: [ TylerS1066, SharkBlack3D ]
 description: WorldGuard Block Flags - Granular block control for WorldGuard regions
 website: https://github.com/sharkblack3d/WGBlockFlags/
