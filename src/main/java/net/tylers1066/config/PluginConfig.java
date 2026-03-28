@@ -13,6 +13,12 @@ public class PluginConfig {
     private final boolean debug;
     private final long messageCooldownMs;
 
+    // Farm settings
+    private final int globalGrowInterval;
+    private final int minGrowInterval;
+    private final boolean replantOnlyMature;
+    private final boolean suppressDropsOnReplant;
+
     public PluginConfig(JavaPlugin plugin) {
         FileConfiguration config = plugin.getConfig();
         this.denyPlaceMessage = config.getString("messages.deny-place",
@@ -23,6 +29,11 @@ public class PluginConfig {
                 "&cYou are not allowed to interact with &e{block} &chere.");
         this.debug = config.getBoolean("debug", false);
         this.messageCooldownMs = config.getLong("message-cooldown", 2) * 1000L;
+
+        this.globalGrowInterval = config.getInt("farm.grow-interval", 400);
+        this.minGrowInterval = config.getInt("farm.min-grow-interval", 20);
+        this.replantOnlyMature = config.getBoolean("farm.replant-only-mature", true);
+        this.suppressDropsOnReplant = config.getBoolean("farm.suppress-drops-on-replant", false);
     }
 
     public Component getDenyPlaceMessage(Material block) {
@@ -43,6 +54,22 @@ public class PluginConfig {
 
     public long getMessageCooldownMs() {
         return messageCooldownMs;
+    }
+
+    public int getGlobalGrowInterval() {
+        return globalGrowInterval;
+    }
+
+    public int getMinGrowInterval() {
+        return minGrowInterval;
+    }
+
+    public boolean isReplantOnlyMature() {
+        return replantOnlyMature;
+    }
+
+    public boolean isSuppressDropsOnReplant() {
+        return suppressDropsOnReplant;
     }
 
     private Component formatMessage(String message, Material block) {
