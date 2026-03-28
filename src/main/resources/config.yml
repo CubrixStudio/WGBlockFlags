@@ -17,3 +17,24 @@ debug: false
 # Cooldown for deny messages in seconds (prevents message spam)
 # Set to 0 to send every time
 message-cooldown: 2
+
+# ============================================================
+# Farm Zone Management
+# ============================================================
+farm:
+  # Default ticks between forced crop growth attempts in farm regions.
+  # 20 ticks = 1 second.  200 = 10 seconds.  400 = 20 seconds.
+  # Per-region override: /rg flag <region> farm-grow-interval <ticks>
+  grow-interval: 400
+
+  # Minimum grow-interval allowed via per-region flag.
+  # Prevents values that would cause excessive server load.
+  min-grow-interval: 20
+
+  # If true, auto-replant only fires when the crop was fully grown at break time.
+  # Set to false to replant any broken crop regardless of its growth stage.
+  replant-only-mature: true
+
+  # If true, the normal item drops are suppressed when a crop is auto-replanted.
+  # Prevents seed accumulation when auto-grow and auto-replant are both active.
+  suppress-drops-on-replant: false
