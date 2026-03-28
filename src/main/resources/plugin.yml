@@ -21,3 +21,6 @@ permissions:
   wgblockflags.notify:
     description: Receive debug notifications
     default: op
+  wgblockflags.farm.harvest:
+    description: Allows breaking immature crops in farm-protect-crops regions
+    default: op
