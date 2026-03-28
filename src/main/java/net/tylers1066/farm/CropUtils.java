@@ -182,11 +182,13 @@ public class CropUtils {
         }
 
         // Ageable crops: single-stage increment.
+        // Use applyPhysics=false so the crop is never removed by physics checks
+        // (e.g. dry farmland), keeping the forced-grow independent of server gamerules.
         BlockData data = block.getBlockData();
         if (data instanceof Ageable ageable) {
             if (ageable.getAge() < ageable.getMaximumAge()) {
                 ageable.setAge(ageable.getAge() + 1);
-                block.setBlockData(ageable);
+                block.setBlockData(ageable, false);
             }
         }
     }
