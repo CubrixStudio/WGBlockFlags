@@ -45,7 +45,7 @@ public class FarmBreakListener implements Listener {
         Material type = block.getType();
 
         // Only handle Ageable crops — vertical crops have no well-defined "replant" seed.
-        if (!(block.getBlockData() instanceof org.bukkit.block.data.Ageable)) {
+        if (!CropUtils.AGEABLE_CROPS.contains(type)) {
             return;
         }
         // Verify the block has valid soil support for replanting.
