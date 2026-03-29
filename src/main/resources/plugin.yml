@@ -24,3 +24,9 @@ permissions:
   wgblockflags.farm.harvest:
     description: Allows breaking immature crops in farm-protect-crops regions
     default: op
+  wgblockflags.item.pickup.bypass:
+    description: Bypass deny-item-pickup restrictions
+    default: op
+  wgblockflags.item.drop.bypass:
+    description: Bypass deny-item-drop restrictions
+    default: op

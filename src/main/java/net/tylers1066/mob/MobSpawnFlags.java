@@ -60,8 +60,14 @@ public class MobSpawnFlags {
      */
     public static final StringFlag MOB_SPAWN_TIME = new StringFlag("mob-spawn-time");
 
+    /**
+     * Weather restriction: {@code "any"} (default), {@code "clear"}, or {@code "rain"}.
+     * Usage: {@code /rg flag <region> mob-spawn-weather rain}
+     */
+    public static final StringFlag MOB_SPAWN_WEATHER = new StringFlag("mob-spawn-weather");
+
     public static int count() {
-        return 8;
+        return 9;
     }
 
     private MobSpawnFlags() {}

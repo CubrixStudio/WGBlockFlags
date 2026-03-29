@@ -19,6 +19,9 @@ public class PluginConfig {
     private final boolean replantOnlyMature;
     private final boolean suppressDropsOnReplant;
 
+    // Block regen settings
+    private final int blockRegenDefaultDelay;
+
     // Mob spawn settings
     private final int mobSpawnInterval;
     private final int mobSpawnMax;
@@ -37,6 +40,8 @@ public class PluginConfig {
                 "&cYou are not allowed to interact with &e{block} &chere.");
         this.debug = config.getBoolean("debug", false);
         this.messageCooldownMs = config.getLong("message-cooldown", 2) * 1000L;
+
+        this.blockRegenDefaultDelay = config.getInt("block-regen.default-delay", 1200);
 
         this.globalGrowInterval = config.getInt("farm.grow-interval", 400);
         this.minGrowInterval = config.getInt("farm.min-grow-interval", 20);
@@ -85,6 +90,10 @@ public class PluginConfig {
 
     public boolean isSuppressDropsOnReplant() {
         return suppressDropsOnReplant;
+    }
+
+    public int getBlockRegenDefaultDelay() {
+        return blockRegenDefaultDelay;
     }
 
     public int getMobSpawnInterval() {

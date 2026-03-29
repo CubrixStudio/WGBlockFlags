@@ -67,3 +67,12 @@ mob-spawn:
   # Number of random positions to try when searching for a safe spawn location.
   # Increase if mobs frequently fail to spawn in regions with complex terrain.
   spawn-attempts: 20
+
+# ============================================================
+# Block Regeneration
+# ============================================================
+block-regen:
+  # Default ticks before a broken block regenerates.
+  # 20 ticks = 1 second.  1200 = 60 seconds.
+  # Per-region override: /rg flag <region> block-regen-delay <ticks>
+  default-delay: 1200
