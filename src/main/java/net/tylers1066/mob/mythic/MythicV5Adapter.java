@@ -50,20 +50,17 @@ public class MythicV5Adapter implements MythicAdapter {
         Collection<ActiveMob> allActive = MythicBukkit.inst().getMobManager().getActiveMobs();
         int count = 0;
         for (ActiveMob mob : allActive) {
-            if (mob.isDead()) {
-                continue;
-            }
+            if (mob.isDead()) continue;
+            // Cheap type filter before any location work.
+            if (!mobTypes.isEmpty() && !mobTypes.contains(mob.getMobType())) continue;
+
             AbstractEntity abstractEntity = mob.getEntity();
-            if (abstractEntity == null || abstractEntity.isDead()) {
-                continue;
-            }
-            if (!mobTypes.isEmpty() && !mobTypes.contains(mob.getMobType())) {
-                continue;
-            }
+            if (abstractEntity == null || abstractEntity.isDead()) continue;
+
             Location loc = abstractEntity.getBukkitEntity().getLocation();
-            if (!loc.getWorld().equals(world)) {
-                continue;
-            }
+            // Filter by world reference before the bounding-box / contains() check.
+            if (!world.equals(loc.getWorld())) continue;
+
             if (region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) {
                 count++;
             }

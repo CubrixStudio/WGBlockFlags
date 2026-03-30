@@ -19,6 +19,8 @@ public class MobModule {
     private MythicAdapter adapter;
     private MobRegionCache cache;
     private MobSpawnManager manager;
+    /** Guard against registering MobDropListener more than once. */
+    private boolean dropListenerRegistered = false;
 
     public MobModule(WGBlockFlags plugin) {
         this.plugin = plugin;
@@ -30,7 +32,11 @@ public class MobModule {
      */
     public void enable() {
         // Drop rate listener works for all mobs regardless of MythicMobs presence.
-        plugin.getServer().getPluginManager().registerEvents(new MobDropListener(), plugin);
+        // Guard prevents double-registration when reload() falls back to enable().
+        if (!dropListenerRegistered) {
+            plugin.getServer().getPluginManager().registerEvents(new MobDropListener(), plugin);
+            dropListenerRegistered = true;
+        }
 
         // Build cache for spawn filter listener (works independently of MythicMobs)
         cache = new MobRegionCache();

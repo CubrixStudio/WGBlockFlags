@@ -13,6 +13,7 @@ import org.bukkit.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Drives the automatic mob-spawn mechanic for WorldGuard farm regions.
@@ -33,7 +34,8 @@ public class MobSpawnManager {
     private final WGBlockFlags plugin;
     private final MobRegionCache cache;
     private final MythicAdapter adapter;
-    private final Random random = new Random();
+    // Use ThreadLocalRandom — no contention, no object allocation each use.
+    private static ThreadLocalRandom rng() { return ThreadLocalRandom.current(); }
 
     /** Last spawn tick per region key ({@code "worldName:regionId"}). Uses {@link World#getFullTime()}. */
     private final Map<String, Long> lastSpawnTick = new HashMap<>();
@@ -80,15 +82,20 @@ public class MobSpawnManager {
                 if (currentTick - last < data.spawnInterval()) {
                     continue;
                 }
-                lastSpawnTick.put(key, currentTick);
 
-                // Time-of-day and weather checks
+                // Check time-of-day and weather conditions BEFORE advancing the timer.
+                // If conditions are not met the timer is not reset, so we will retry
+                // on the next scheduler fire (every TASK_PERIOD_TICKS ticks) rather
+                // than waiting a full interval before trying again.
                 if (!isValidTime(world, data.spawnTime())) {
                     continue;
                 }
                 if (!isValidWeather(world, data.spawnWeather())) {
                     continue;
                 }
+
+                // Conditions met — advance the timer now to prevent rapid re-spawning.
+                lastSpawnTick.put(key, currentTick);
 
                 // Population check
                 int current = adapter.countMobsInRegion(world, entry.region(), data.mobTypes());
@@ -116,7 +123,7 @@ public class MobSpawnManager {
                 // No valid position found — skip remaining mobs for this cycle
                 break;
             }
-            String mobType = types.get(random.nextInt(types.size()));
+            String mobType = types.get(rng().nextInt(types.size()));
             double level = resolveLevel(data.levelMin(), data.levelMax());
             adapter.spawnMob(mobType, loc, level);
         }
@@ -142,8 +149,8 @@ public class MobSpawnManager {
         }
 
         for (int attempt = 0; attempt < attempts; attempt++) {
-            int x = min.x() + (rangeX > 0 ? random.nextInt(rangeX + 1) : 0);
-            int z = min.z() + (rangeZ > 0 ? random.nextInt(rangeZ + 1) : 0);
+            int x = min.x() + (rangeX > 0 ? rng().nextInt(rangeX + 1) : 0);
+            int z = min.z() + (rangeZ > 0 ? rng().nextInt(rangeZ + 1) : 0);
 
             // Scan downward from the region ceiling to find a valid ground position
             for (int y = max.y(); y > min.y(); y--) {
@@ -186,7 +193,7 @@ public class MobSpawnManager {
         if (min >= max) {
             return min;
         }
-        return min + random.nextInt(max - min + 1);
+        return min + rng().nextInt(max - min + 1);
     }
 
     private boolean isSolidGround(Block block) {

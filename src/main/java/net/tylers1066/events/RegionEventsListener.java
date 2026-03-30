@@ -16,6 +16,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 import java.time.Duration;
@@ -52,6 +53,11 @@ public class RegionEventsListener implements Listener {
         Location to = event.getTo();
         if (to == null) return;
         handleTransition(event.getPlayer(), from, to);
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        playerRegions.remove(event.getPlayer().getUniqueId());
     }
 
     /** Clears all tracked region sets (called on module disable/reload). */
