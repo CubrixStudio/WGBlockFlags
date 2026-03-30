@@ -125,8 +125,8 @@ public class MobSpawnFilterListener implements Listener {
             case COD, SALMON, PUFFERFISH, TROPICAL_FISH -> true;
 
             // Other
-            case BAT, RABBIT, BEE, GOAT, FOX, WOLF, OCELOT, PARROT,
-                 STRIDER, GLOW_SQUID, SNIFFER, CAMEL -> true;
+            case BAT, RABBIT, BEE, GOAT, FOX, PARROT,
+                 STRIDER, SNIFFER, CAMEL -> true;
 
             default -> false;
         };
@@ -150,15 +150,26 @@ public class MobSpawnFilterListener implements Listener {
             return null;
         }
 
-        ProtectedRegion region = rm.getApplicableRegion(BukkitAdapter.adapt(loc)).getRegions().stream()
-                .findFirst()
-                .orElse(null);
+        // Get all regions and find the one containing the location
+        com.sk89q.worldguard.protection.regions.ProtectedRegion region = null;
+        if (rm.getRegions() != null) {
+            // Convert Location to BlockVector3 using coordinates
+            com.sk89q.worldedit.math.BlockVector3 vec = new com.sk89q.worldedit.math.BlockVector3(
+                loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()
+            );
+            for (com.sk89q.worldguard.protection.regions.ProtectedRegion r : rm.getRegions().values()) {
+                if (r.contains(vec)) {
+                    region = r;
+                    break;
+                }
+            }
+        }
 
         if (region == null) {
             return null;
         }
 
-        MobRegionCache.RegionEntry entry = cache.getData(world.getName(), region.getId());
+        MobRegionCache.RegionEntry entry = cache.getRegionEntry(world.getName(), region.getId());
         return entry != null ? entry.filterData() : null;
     }
 }

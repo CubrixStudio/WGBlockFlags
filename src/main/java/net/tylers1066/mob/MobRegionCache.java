@@ -98,7 +98,7 @@ public class MobRegionCache {
             return null;
         }
         RegionEntry entry = worldCache.get(regionId);
-        return entry != null ? entry.data() : null;
+        return entry != null ? entry.spawnData() : null;
     }
 
     /**
@@ -111,11 +111,20 @@ public class MobRegionCache {
         }
         List<RegionEntry> result = new ArrayList<>();
         for (RegionEntry entry : worldCache.values()) {
-            if (entry.data().autoSpawn()) {
+            if (entry.spawnData().autoSpawn()) {
                 result.add(entry);
             }
         }
         return result;
+    }
+
+    /**
+     * Helper method to get a RegionEntry by world name and region ID.
+     * Used by {@link MobSpawnFilterListener}.
+     */
+    public RegionEntry getRegionEntry(String worldName, String regionId) {
+        Map<String, RegionEntry> worldCache = cache.get(worldName);
+        return worldCache != null ? worldCache.get(regionId) : null;
     }
 
     // -------------------------------------------------------------------------
@@ -174,8 +183,8 @@ public class MobRegionCache {
     }
 
     private int resolveInt(ProtectedRegion region,
-                           com.sk89q.worldguard.protection.flags.IntegerFlag flag,
-                           int defaultValue) {
+           com.sk89q.worldguard.protection.flags.IntegerFlag flag,
+           int defaultValue) {
         Integer value = region.getFlag(flag);
         return (value != null && value > 0) ? value : defaultValue;
     }

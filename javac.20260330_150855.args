@@ -1,0 +1,11 @@
+-d
+target/classes
+-sourcepath
+src/main/java
+src/main/java/net/tylers1066/WGBlockFlags.java
+src/main/java/net/tylers1066/mob/MobDropListener.java
+src/main/java/net/tylers1066/mob/MobModule.java
+src/main/java/net/tylers1066/mob/MobRegionCache.java
+src/main/java/net/tylers1066/mob/MobSpawnFilterListener.java
+src/main/java/net/tylers1066/mob/MobSpawnFlags.java
+src/main/java/net/tylers1066/mob/MobSpawnManager.java
