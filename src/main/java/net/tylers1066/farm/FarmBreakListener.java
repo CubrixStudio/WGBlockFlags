@@ -53,7 +53,12 @@ public class FarmBreakListener implements Listener {
         if (!CropUtils.isCrop(block)) {
             return;
         }
-        // Fully-grown crops may always be harvested.
+        // Vertical crops (sugar cane, bamboo, cactus, kelp, vines…) have no "mature" state
+        // and grow indefinitely — farm-protect-crops does not apply to them.
+        if (CropUtils.isVerticalCrop(type)) {
+            return;
+        }
+        // Fully-grown Ageable crops may always be harvested.
         if (CropUtils.isFullyGrown(block)) {
             return;
         }
