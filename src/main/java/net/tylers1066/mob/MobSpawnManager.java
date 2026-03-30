@@ -73,7 +73,7 @@ public class MobSpawnManager {
             List<RegionEntry> entries = cache.getAutoSpawnEntries(world.getName());
 
             for (RegionEntry entry : entries) {
-                MobSpawnData data = entry.data();
+                MobSpawnData data = entry.spawnData();
                 String key = world.getName() + ":" + entry.region().getId();
 
                 long last = lastSpawnTick.getOrDefault(key, 0L);

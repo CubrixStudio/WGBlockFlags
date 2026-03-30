@@ -32,13 +32,18 @@ public class MobModule {
         // Drop rate listener works for all mobs regardless of MythicMobs presence.
         plugin.getServer().getPluginManager().registerEvents(new MobDropListener(), plugin);
 
+        // Build cache for spawn filter listener (works independently of MythicMobs)
+        cache = new MobRegionCache();
+        cache.rebuild(plugin.getPluginConfig());
+
+        // Spawn filter listener works independently of MythicMobs presence.
+        plugin.getServer().getPluginManager().registerEvents(new MobSpawnFilterListener(cache), plugin);
+
         adapter = resolveMythicAdapter();
         if (!adapter.isAvailable()) {
             // Warning already logged inside resolveMythicAdapter()
             return;
         }
-        cache = new MobRegionCache();
-        cache.rebuild(plugin.getPluginConfig());
         manager = new MobSpawnManager(plugin, cache, adapter);
         manager.start();
         plugin.getLogger().info("[MobSpawn] Mob spawn module enabled.");

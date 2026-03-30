@@ -82,8 +82,39 @@ public class MobSpawnFlags {
      */
     public static final StringFlag MOB_DROP_RATES = new StringFlag("mob-drop-rates");
 
+    /**
+     * Enables mob spawn filtering in the region.
+     * When set to {@code allow}, natural mob spawning is filtered based on other mob flags.
+     * Usage: {@code /rg flag <region> mob-spawn-filter allow}
+     */
+    public static final StateFlag MOB_SPAWN_FILTER = new StateFlag("mob-spawn-filter", false);
+
+    /**
+     * Whitelist of mob types allowed to spawn naturally in the region.
+     * Format: Bukkit entity type names (case-insensitive): ZOMBIE, SKELETON, COW, etc.
+     * If set, only these mob types can spawn (blacklist is ignored).
+     * Usage: {@code /rg flag <region> mob-allow-types Cow,Pig,Sheep}
+     */
+    public static final SetFlag<String> MOB_ALLOW_TYPES = new SetFlag<>("mob-allow-types", new StringFlag(null));
+
+    /**
+     * Blacklist of mob types denied from spawning naturally in the region.
+     * Format: Bukkit entity type names (case-insensitive).
+     * Only checked if {@link #MOB_ALLOW_TYPES} is not set.
+     * Usage: {@code /rg flag <region> mob-deny-types Zombie,Skeleton,Creeper}
+     */
+    public static final SetFlag<String> MOB_DENY_TYPES = new SetFlag<>("mob-deny-types", new StringFlag(null));
+
+    /**
+     * Controls whether vanilla Minecraft mobs can spawn in the region.
+     * Set to {@code deny} to block all vanilla mobs (zombie, skeleton, creeper, etc.).
+     * MythicMobs and other plugin mobs are not affected.
+     * Usage: {@code /rg flag <region> mob-allow-vanilla deny}
+     */
+    public static final StateFlag MOB_ALLOW_VANILLA = new StateFlag("mob-allow-vanilla", true);
+
     public static int count() {
-        return 11;
+        return 15;
     }
 
     private MobSpawnFlags() {}

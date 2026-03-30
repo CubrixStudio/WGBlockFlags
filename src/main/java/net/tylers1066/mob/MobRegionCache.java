@@ -40,11 +40,26 @@ public class MobRegionCache {
     ) {}
 
     /**
+     * Immutable snapshot of a region's mob spawn filter configuration.
+     *
+     * @param filterEnabled whether spawn filtering is active (mob-spawn-filter=allow)
+     * @param allowTypes    whitelist of allowed mob types (if empty, no whitelist applied)
+     * @param denyTypes     blacklist of denied mob types (only checked if allowTypes is empty)
+     * @param allowVanilla  whether vanilla mobs are allowed (true=allow, deny=block vanilla)
+     */
+    public record MobFilterData(
+            boolean filterEnabled,
+            Set<String> allowTypes,
+            Set<String> denyTypes,
+            boolean allowVanilla
+    ) {}
+
+    /**
      * A region paired with its computed spawn data.
      * The {@link ProtectedRegion} reference is needed in {@link MobSpawnManager}
      * for bounding-box access and {@code region.contains()} checks.
      */
-    public record RegionEntry(ProtectedRegion region, MobSpawnData data) {}
+    public record RegionEntry(ProtectedRegion region, MobSpawnData spawnData, MobFilterData filterData) {}
 
     // world name → (region id → entry)
     private final Map<String, Map<String, RegionEntry>> cache = new HashMap<>();
@@ -66,10 +81,9 @@ public class MobRegionCache {
 
             for (Map.Entry<String, ProtectedRegion> entry : rm.getRegions().entrySet()) {
                 ProtectedRegion region = entry.getValue();
-                MobSpawnData data = buildData(region, config);
-                if (data != null) {
-                    worldCache.put(entry.getKey(), new RegionEntry(region, data));
-                }
+                MobSpawnData spawnData = buildData(region, config);
+                MobFilterData filterData = buildFilterData(region);
+                worldCache.put(entry.getKey(), new RegionEntry(region, spawnData, filterData));
             }
         }
     }
@@ -164,5 +178,29 @@ public class MobRegionCache {
                            int defaultValue) {
         Integer value = region.getFlag(flag);
         return (value != null && value > 0) ? value : defaultValue;
+    }
+
+    /**
+     * Builds filter data from the flags set on a region.
+     * Always returns a MobFilterData instance (may have filterEnabled=false).
+     */
+    private MobFilterData buildFilterData(ProtectedRegion region) {
+        StateFlag.State filterState = region.getFlag(MobSpawnFlags.MOB_SPAWN_FILTER);
+        boolean filterEnabled = (filterState == StateFlag.State.ALLOW);
+
+        Set<String> rawAllow = region.getFlag(MobSpawnFlags.MOB_ALLOW_TYPES);
+        Set<String> allowTypes = (rawAllow != null && !rawAllow.isEmpty())
+                ? Collections.unmodifiableSet(new HashSet<>(rawAllow))
+                : Collections.emptySet();
+
+        Set<String> rawDeny = region.getFlag(MobSpawnFlags.MOB_DENY_TYPES);
+        Set<String> denyTypes = (rawDeny != null && !rawDeny.isEmpty())
+                ? Collections.unmodifiableSet(new HashSet<>(rawDeny))
+                : Collections.emptySet();
+
+        StateFlag.State vanillaState = region.getFlag(MobSpawnFlags.MOB_ALLOW_VANILLA);
+        boolean allowVanilla = (vanillaState != StateFlag.State.DENY);
+
+        return new MobFilterData(filterEnabled, allowTypes, denyTypes, allowVanilla);
     }
 }

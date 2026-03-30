@@ -72,6 +72,12 @@ public final class WGBlockFlags extends JavaPlugin {
         registerFlag(flagRegistry, MobSpawnFlags.MOB_DROP_MULTIPLIER);
         registerFlag(flagRegistry, MobSpawnFlags.MOB_DROP_RATES);
 
+        // Mob spawn filter flags
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_FILTER);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_ALLOW_TYPES);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_DENY_TYPES);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_ALLOW_VANILLA);
+
         // Item control flags
         registerFlag(flagRegistry, ItemFlags.DENY_ITEM_PICKUP);
         registerFlag(flagRegistry, ItemFlags.DENY_ITEM_DROP);
