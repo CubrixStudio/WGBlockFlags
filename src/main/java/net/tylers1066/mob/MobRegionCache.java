@@ -111,7 +111,8 @@ public class MobRegionCache {
         }
         List<RegionEntry> result = new ArrayList<>();
         for (RegionEntry entry : worldCache.values()) {
-            if (entry.spawnData().autoSpawn()) {
+            MobSpawnData data = entry.spawnData();
+            if (data != null && data.autoSpawn()) {
                 result.add(entry);
             }
         }

@@ -39,7 +39,8 @@
       "Bash(export JAVA_HOME=\"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\")",
       "Bash(\"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\\\\bin\\\\javac\" -version)",
       "Bash(\"C:/Temp/MavenInstall/apache-maven-3.9.9/bin/mvn\" package:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(powershell -Command \"Get-ChildItem 'F:\\\\JEtbrain\\\\WGBlockFlags\\\\target\\\\*.jar'\")"
     ]
   }
 }

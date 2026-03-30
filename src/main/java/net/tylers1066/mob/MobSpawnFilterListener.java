@@ -142,34 +142,53 @@ public class MobSpawnFilterListener implements Listener {
             return null;
         }
 
-        RegionManager rm = WorldGuard.getInstance().getPlatform()
-                .getRegionContainer()
-                .get(BukkitAdapter.adapt(world));
+        try {
+            // Get region manager for this world using WorldGuard
+            var adaptedWorld = BukkitAdapter.adapt(world);
+            com.sk89q.worldguard.protection.managers.RegionManager rm = WorldGuard.getInstance()
+                    .getPlatform()
+                    .getRegionContainer()
+                    .get(adaptedWorld);
 
-        if (rm == null) {
-            return null;
-        }
-
-        // Get all regions and find the one containing the location
-        com.sk89q.worldguard.protection.regions.ProtectedRegion region = null;
-        if (rm.getRegions() != null) {
-            // Convert Location to BlockVector3 using coordinates
-            com.sk89q.worldedit.math.BlockVector3 vec = new com.sk89q.worldedit.math.BlockVector3(
-                loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()
-            );
-            for (com.sk89q.worldguard.protection.regions.ProtectedRegion r : rm.getRegions().values()) {
-                if (r.contains(vec)) {
-                    region = r;
-                    break;
-                }
+            if (rm == null) {
+                return null;
             }
-        }
 
-        if (region == null) {
+            // Get all regions and find the one containing the location
+            // Use a try-catch to handle BlockVector3 instantiation issues
+            com.sk89q.worldguard.protection.regions.ProtectedRegion region = null;
+            try {
+                // Safely instantiate BlockVector3 and check containment
+                var vectorClass = Class.forName("com.sk89q.worldedit.math.BlockVector3");
+                var constructor = vectorClass.getDeclaredConstructor(int.class, int.class, int.class);
+                constructor.setAccessible(true);
+                var vec = (com.sk89q.worldedit.math.BlockVector3) constructor.newInstance(
+                    loc.getBlockX(), loc.getBlockY(), loc.getBlockZ()
+                );
+
+                for (var r : rm.getRegions().values()) {
+                    try {
+                        if (r.contains(vec)) {
+                            region = r;
+                            break;
+                        }
+                    } catch (Exception e) {
+                        // Skip regions that fail containment check
+                    }
+                }
+            } catch (Exception e) {
+                // BlockVector3 not available, skip filtering
+            }
+
+            if (region == null) {
+                return null;
+            }
+
+            MobRegionCache.RegionEntry entry = cache.getRegionEntry(world.getName(), region.getId());
+            return entry != null ? entry.filterData() : null;
+        } catch (Exception e) {
+            // Region lookup failed, skip filtering
             return null;
         }
-
-        MobRegionCache.RegionEntry entry = cache.getRegionEntry(world.getName(), region.getId());
-        return entry != null ? entry.filterData() : null;
     }
 }
