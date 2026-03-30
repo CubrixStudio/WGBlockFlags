@@ -74,9 +74,7 @@ public class FarmBreakListener implements Listener {
                 }
                 event.setCancelled(true);
                 if (event.getPlayer() != null) {
-                    event.getPlayer().sendMessage(
-                            net.kyori.adventure.text.Component.text(
-                                    "§cVous ne pouvez pas casser une plantation qui n'est pas encore mûre."));
+                    plugin.getLanguageConfig().send(event.getPlayer(), "farm-protect-immature");
                 }
                 return;
             }

@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.tylers1066.WGBlockFlags;
+import net.tylers1066.config.LanguageConfig;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -19,8 +20,10 @@ public class WGBFCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
+        LanguageConfig lang = plugin.getLanguageConfig();
+
         if (!sender.hasPermission("wgblockflags.admin")) {
-            sender.sendMessage(Component.text("You do not have permission to use this command.", NamedTextColor.RED));
+            lang.send(sender, "cmd-no-permission");
             return true;
         }
 
@@ -32,13 +35,11 @@ public class WGBFCommand implements CommandExecutor {
         switch (args[0].toLowerCase()) {
             case "reload" -> {
                 plugin.reloadPluginConfig();
-                sender.sendMessage(Component.text("WGBlockFlags configuration reloaded.", NamedTextColor.GREEN));
+                lang.send(sender, "cmd-reload-success");
             }
             case "info" -> sendInfo(sender);
             case "help" -> sendHelp(sender);
-            default -> {
-                sender.sendMessage(Component.text("Unknown subcommand. Use /wgbf help", NamedTextColor.RED));
-            }
+            default -> lang.send(sender, "cmd-unknown-subcommand");
         }
         return true;
     }

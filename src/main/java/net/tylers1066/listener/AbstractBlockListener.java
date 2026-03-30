@@ -6,6 +6,7 @@ import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import net.kyori.adventure.text.Component;
 import net.tylers1066.WGBlockFlags;
 import net.tylers1066.config.PluginConfig;
+import net.tylers1066.config.LanguageConfig;
 import net.tylers1066.flags.Flags;
 import net.tylers1066.utils.WGUtils;
 import org.bukkit.Material;
@@ -94,12 +95,15 @@ public abstract class AbstractBlockListener implements Listener {
             messageCooldowns.put(player.getUniqueId(), now);
         }
 
-        Component message = switch (action) {
-            case PLACE -> config.getDenyPlaceMessage(type);
-            case BREAK -> config.getDenyBreakMessage(type);
-            case INTERACT -> config.getDenyInteractMessage(type);
+        LanguageConfig lang = plugin.getLanguageConfig();
+        String blockName = PluginConfig.formatMaterialName(type);
+        String key = switch (action) {
+            case PLACE -> "deny-place";
+            case BREAK -> "deny-break";
+            case INTERACT -> "deny-interact";
         };
 
+        Component message = lang.get(key, "{block}", blockName);
         if (message != null) {
             player.sendMessage(message);
         }

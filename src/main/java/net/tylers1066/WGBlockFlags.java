@@ -6,6 +6,7 @@ import com.sk89q.worldguard.protection.flags.registry.FlagConflictException;
 import com.sk89q.worldguard.protection.flags.registry.FlagRegistry;
 import net.tylers1066.commands.WGBFCommand;
 import net.tylers1066.commands.WGBFTabCompleter;
+import net.tylers1066.config.LanguageConfig;
 import net.tylers1066.config.PluginConfig;
 import net.tylers1066.events.RegionEventsFlags;
 import net.tylers1066.events.RegionEventsModule;
@@ -27,6 +28,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class WGBlockFlags extends JavaPlugin {
     private static WGBlockFlags instance;
     private PluginConfig pluginConfig;
+    private LanguageConfig languageConfig;
     private FarmModule farmModule;
     private MobModule mobModule;
     private BlockRegenModule blockRegenModule;
@@ -92,6 +94,7 @@ public final class WGBlockFlags extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         pluginConfig = new PluginConfig(this);
+        languageConfig = new LanguageConfig(this);
 
         getServer().getPluginManager().registerEvents(new PlaceListener(this), this);
         getServer().getPluginManager().registerEvents(new BreakListener(this), this);
@@ -147,9 +150,14 @@ public final class WGBlockFlags extends JavaPlugin {
         return pluginConfig;
     }
 
+    public LanguageConfig getLanguageConfig() {
+        return languageConfig;
+    }
+
     public void reloadPluginConfig() {
         reloadConfig();
         pluginConfig = new PluginConfig(this);
+        languageConfig.reload();
         if (farmModule != null) {
             farmModule.reload();
         }

@@ -3,6 +3,8 @@ package net.tylers1066.listener;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import net.tylers1066.WGBlockFlags;
+import net.tylers1066.config.LanguageConfig;
+import net.tylers1066.config.PluginConfig;
 import net.tylers1066.flags.ItemFlags;
 import net.tylers1066.utils.WGUtils;
 import org.bukkit.Location;
@@ -42,6 +44,8 @@ public class ItemListener implements Listener {
             Set<Material> denied = region.getFlag(ItemFlags.DENY_ITEM_PICKUP);
             if (denied != null && denied.contains(itemType)) {
                 event.setCancelled(true);
+                plugin.getLanguageConfig().send(player, "deny-item-pickup",
+                        "{item}", PluginConfig.formatMaterialName(itemType));
                 return;
             }
         }
@@ -61,6 +65,8 @@ public class ItemListener implements Listener {
             Set<Material> denied = region.getFlag(ItemFlags.DENY_ITEM_DROP);
             if (denied != null && denied.contains(itemType)) {
                 event.setCancelled(true);
+                plugin.getLanguageConfig().send(player, "deny-item-drop",
+                        "{item}", PluginConfig.formatMaterialName(itemType));
                 return;
             }
         }
