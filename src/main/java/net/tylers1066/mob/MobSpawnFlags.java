@@ -66,8 +66,24 @@ public class MobSpawnFlags {
      */
     public static final StringFlag MOB_SPAWN_WEATHER = new StringFlag("mob-spawn-weather");
 
+    /**
+     * Global drop multiplier (%) for all mobs that die inside the region.
+     * 100 = normal, 200 = double, 50 = half, 0 = no drops.
+     * Overridden per-entity-type by {@link #MOB_DROP_RATES}.
+     * Usage: {@code /rg flag <region> mob-drop-multiplier 200}
+     */
+    public static final IntegerFlag MOB_DROP_MULTIPLIER = new IntegerFlag("mob-drop-multiplier");
+
+    /**
+     * Per-entity-type drop multipliers (%).  Format: {@code "type:percent,type:percent"}.
+     * Use Bukkit entity type names (case-insensitive): zombie, skeleton, creeper, etc.
+     * Takes priority over {@link #MOB_DROP_MULTIPLIER}.
+     * Usage: {@code /rg flag <region> mob-drop-rates "zombie:200,skeleton:150,creeper:0"}
+     */
+    public static final StringFlag MOB_DROP_RATES = new StringFlag("mob-drop-rates");
+
     public static int count() {
-        return 9;
+        return 11;
     }
 
     private MobSpawnFlags() {}

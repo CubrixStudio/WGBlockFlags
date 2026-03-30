@@ -64,8 +64,23 @@ public class FarmFlags {
      */
     public static final IntegerFlag FARM_MAX_HEIGHT = new IntegerFlag("farm-max-height");
 
+    /**
+     * Global drop multiplier (%) for all crops broken in the region.
+     * 100 = normal, 200 = double, 50 = half, 0 = no drops.
+     * Overridden per-crop-type by {@link #FARM_DROP_RATES}.
+     * Usage: {@code /rg flag <region> farm-drop-multiplier 200}
+     */
+    public static final IntegerFlag FARM_DROP_MULTIPLIER = new IntegerFlag("farm-drop-multiplier");
+
+    /**
+     * Per-crop-type drop multipliers (%).  Format: {@code "type:percent,type:percent"}.
+     * Material names are case-insensitive.  Takes priority over {@link #FARM_DROP_MULTIPLIER}.
+     * Usage: {@code /rg flag <region> farm-drop-rates "wheat:300,carrots:150,potatoes:0"}
+     */
+    public static final StringFlag FARM_DROP_RATES = new StringFlag("farm-drop-rates");
+
     public static int count() {
-        return 8;
+        return 10;
     }
 
     private FarmFlags() {}

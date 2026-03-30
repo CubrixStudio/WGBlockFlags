@@ -54,6 +54,8 @@ public final class WGBlockFlags extends JavaPlugin {
         registerFlag(flagRegistry, FarmFlags.FARM_ACTIVE_TIME);
         registerFlag(flagRegistry, FarmFlags.FARM_ACTIVE_WEATHER);
         registerFlag(flagRegistry, FarmFlags.FARM_MAX_HEIGHT);
+        registerFlag(flagRegistry, FarmFlags.FARM_DROP_MULTIPLIER);
+        registerFlag(flagRegistry, FarmFlags.FARM_DROP_RATES);
 
         // Mob spawn flags
         registerFlag(flagRegistry, MobSpawnFlags.MOB_AUTOSPAWN);
@@ -65,6 +67,8 @@ public final class WGBlockFlags extends JavaPlugin {
         registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_LEVEL_MAX);
         registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_TIME);
         registerFlag(flagRegistry, MobSpawnFlags.MOB_SPAWN_WEATHER);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_DROP_MULTIPLIER);
+        registerFlag(flagRegistry, MobSpawnFlags.MOB_DROP_RATES);
 
         // Item control flags
         registerFlag(flagRegistry, ItemFlags.DENY_ITEM_PICKUP);

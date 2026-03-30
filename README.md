@@ -148,6 +148,8 @@ Main command for WGBlockFlags administration.
 | `farm-active-time` | String | any | Grow only at `day`, `night`, or `any` |
 | `farm-active-weather` | String | any | Grow only in `clear`, `rain`, or `any` weather |
 | `farm-max-height` | Integer | crop default | Max height for vertical crops (sugar cane, cactus…) |
+| `farm-drop-multiplier` | Integer (%) | 100 | Global drop rate for all crops (100=normal, 200=double, 0=no drops) |
+| `farm-drop-rates` | String | — | Per-crop drop rates: `"wheat:200,carrots:150,potatoes:0"` |
 
 ### MythicMobs Flags
 
@@ -162,6 +164,8 @@ Main command for WGBlockFlags administration.
 | `mob-spawn-level-max` | Integer | config default | Maximum mob level |
 | `mob-spawn-time` | String | any | Spawn time (`day`/`night`/`any`) |
 | `mob-spawn-weather` | String | any | Spawn weather (`clear`/`rain`/`any`) |
+| `mob-drop-multiplier` | Integer (%) | 100 | Global drop rate for all mobs (100=normal, 200=double, 0=no drops) |
+| `mob-drop-rates` | String | — | Per-entity-type drop rates: `"zombie:200,skeleton:150,creeper:0"` |
 
 ### Item Control Flags
 
@@ -264,6 +268,31 @@ Show a welcome message and title when entering a dungeon:
 /rg flag dungeon region-enter-command "broadcast %player% entered the dungeon!"
 ```
 
+### Custom Drop Rates for Crops
+
+Double all crop drops in a farm zone, but triple wheat specifically:
+
+```
+/rg flag farmzone farm-drop-multiplier 200
+/rg flag farmzone farm-drop-rates "wheat:300,potatoes:0"
+```
+
+`farm-drop-rates` takes per-crop priority over `farm-drop-multiplier`.
+Valid crop names: `wheat`, `carrots`, `potatoes`, `beetroots`, `nether_wart`, `sweet_berry_bush`, etc. (Bukkit `Material` names, lowercase).
+
+### Custom Drop Rates for Mobs
+
+Bonus loot from zombies, but no drops from creepers in a dungeon zone:
+
+```
+/rg flag dungeon mob-drop-multiplier 150
+/rg flag dungeon mob-drop-rates "zombie:300,creeper:0,skeleton:200"
+```
+
+`mob-drop-rates` takes per-type priority over `mob-drop-multiplier`.
+Valid mob names: Bukkit `EntityType` names in lowercase (`zombie`, `skeleton`, `creeper`, `spider`, `enderman`, etc.).
+Both vanilla mobs and MythicMobs spawned entities are affected.
+
 ### MythicMobs Spawning
 
 Set up automatic custom mob spawning:
@@ -363,4 +392,4 @@ For issues and feature requests: [GitHub Issues](https://github.com/TylerS1066/W
 
 ---
 
-**Last Updated**: March 2026 - Version 2.1 (Farm conditions, block regen, item control, region events, mob weather)
+**Last Updated**: March 2026 - Version 2.2 (Drop rate management per zone and per type for crops and mobs)
