@@ -29,6 +29,9 @@ public class MobModule {
      * Must be called from {@link WGBlockFlags#onEnable()}.
      */
     public void enable() {
+        // Drop rate listener works for all mobs regardless of MythicMobs presence.
+        plugin.getServer().getPluginManager().registerEvents(new MobDropListener(), plugin);
+
         adapter = resolveMythicAdapter();
         if (!adapter.isAvailable()) {
             // Warning already logged inside resolveMythicAdapter()

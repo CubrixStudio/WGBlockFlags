@@ -82,8 +82,11 @@ public class MobSpawnManager {
                 }
                 lastSpawnTick.put(key, currentTick);
 
-                // Time-of-day check
+                // Time-of-day and weather checks
                 if (!isValidTime(world, data.spawnTime())) {
+                    continue;
+                }
+                if (!isValidWeather(world, data.spawnWeather())) {
                     continue;
                 }
 
@@ -167,6 +170,14 @@ public class MobSpawnManager {
         return switch (spawnTime) {
             case "day" -> world.isDayTime();
             case "night" -> !world.isDayTime();
+            default -> true; // "any" or unrecognised value
+        };
+    }
+
+    private boolean isValidWeather(World world, String spawnWeather) {
+        return switch (spawnWeather) {
+            case "clear" -> !world.hasStorm() && !world.isThundering();
+            case "rain" -> world.hasStorm() || world.isThundering();
             default -> true; // "any" or unrecognised value
         };
     }

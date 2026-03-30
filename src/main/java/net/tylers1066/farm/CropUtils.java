@@ -166,7 +166,19 @@ public class CropUtils {
      *   <li>Ageable crops (wheat, carrots, …): increments age by one stage.</li>
      * </ul>
      */
+    /**
+     * Advances the crop by one growth stage using the crop's default height limits.
+     */
     public static void advanceGrowth(Block block) {
+        advanceGrowth(block, 0);
+    }
+
+    /**
+     * Advances the crop by one growth stage.
+     *
+     * @param maxHeight maximum column height for upward vertical crops; 0 = use crop defaults
+     */
+    public static void advanceGrowth(Block block, int maxHeight) {
         Material type = block.getType();
 
         // Downward crops must be checked before upward — they are mutually exclusive sets.
@@ -177,7 +189,7 @@ public class CropUtils {
 
         // Upward crops (bamboo / kelp are also Ageable, but columnar growth is correct).
         if (UPWARD_CROPS.contains(type)) {
-            growManual(block, getColumnTop(block));
+            growManual(block, getColumnTop(block), maxHeight);
             return;
         }
 
@@ -248,7 +260,7 @@ public class CropUtils {
      *   <li>Other crops (sugar cane, cactus, bamboo) → places same type above.</li>
      * </ul>
      */
-    private static void growManual(Block bottom, Block top) {
+    private static void growManual(Block bottom, Block top, int regionMaxHeight) {
         Material topType = top.getType();
 
         // BAMBOO_SAPLING → convert to full BAMBOO in-place (the sapling IS the first block)
@@ -262,10 +274,16 @@ public class CropUtils {
             return; // physically blocked
         }
 
-        // Respect height limits for height-capped crops (cactus = 3, sugar cane = 3).
+        // Respect height limits: use region override if set, otherwise crop defaults.
         Material bottomType = bottom.getType();
-        Integer maxHeight = VERTICAL_MAX_HEIGHT.get(bottomType);
-        if (maxHeight != null && countColumnHeight(bottom) >= maxHeight) {
+        int effectiveMax;
+        if (regionMaxHeight > 0) {
+            effectiveMax = regionMaxHeight;
+        } else {
+            Integer defaultMax = VERTICAL_MAX_HEIGHT.get(bottomType);
+            effectiveMax = (defaultMax != null) ? defaultMax : Integer.MAX_VALUE;
+        }
+        if (countColumnHeight(bottom) >= effectiveMax) {
             return;
         }
 

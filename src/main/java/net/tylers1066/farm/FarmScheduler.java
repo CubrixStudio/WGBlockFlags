@@ -57,6 +57,15 @@ public class FarmScheduler {
     /** Per-block grow interval (ticks). */
     private final Map<BlockPos, Integer> growIntervals = new HashMap<>();
 
+    /** Per-block time-of-day restriction ("any", "day", "night"). */
+    private final Map<BlockPos, String> activeTimeMap = new HashMap<>();
+
+    /** Per-block weather restriction ("any", "clear", "rain"). */
+    private final Map<BlockPos, String> activeWeatherMap = new HashMap<>();
+
+    /** Per-block max height override for vertical crops (0 = use crop defaults). */
+    private final Map<BlockPos, Integer> maxHeightMap = new HashMap<>();
+
     /** Chunk-unload cleanup: worldName → chunkKey → tracked positions. */
     private final Map<String, Map<Long, Set<BlockPos>>> chunkTracking = new HashMap<>();
 
@@ -105,6 +114,9 @@ public class FarmScheduler {
         growQueue.clear();
         nextGrowTick.clear();
         growIntervals.clear();
+        activeTimeMap.clear();
+        activeWeatherMap.clear();
+        maxHeightMap.clear();
         chunkTracking.clear();
         pendingScans.clear();
         queuedChunkKeys.clear();
@@ -167,6 +179,9 @@ public class FarmScheduler {
                     if (set != null) set.remove(pos);
                 }
                 growIntervals.remove(pos);
+                activeTimeMap.remove(pos);
+                activeWeatherMap.remove(pos);
+                maxHeightMap.remove(pos);
             }
         }
         if (worldMap.isEmpty()) chunkTracking.remove(worldName);
@@ -185,7 +200,7 @@ public class FarmScheduler {
         for (ProtectedRegion region : regions.getRegions()) {
             FarmRegionData data = cache.getData(block.getWorld().getName(), region.getId());
             if (data != null && data.autoGrow() && data.manages(block.getType())) {
-                trackBlock(block, data.growInterval());
+                trackBlock(block, data.growInterval(), data.activeTime(), data.activeWeather(), data.maxHeight());
                 debug("Tracked " + block.getType() + " at "
                         + block.getX() + "," + block.getY() + "," + block.getZ()
                         + " (region=" + region.getId() + ", interval=" + data.growInterval() + ")");
@@ -212,6 +227,9 @@ public class FarmScheduler {
             if (set != null) set.remove(pos);
         }
         growIntervals.remove(pos);
+        activeTimeMap.remove(pos);
+        activeWeatherMap.remove(pos);
+        maxHeightMap.remove(pos);
 
         String worldName = block.getWorld().getName();
         long ck = chunkKey(block.getX() >> 4, block.getZ() >> 4);
@@ -268,7 +286,21 @@ public class FarmScheduler {
                     // Clean up stale entries.
                     if (!CropUtils.isCrop(block)) {
                         growIntervals.remove(pos);
+                        activeTimeMap.remove(pos);
+                        activeWeatherMap.remove(pos);
+                        maxHeightMap.remove(pos);
                         removeFromChunkTracking(pos.world(), pos);
+                        continue;
+                    }
+
+                    // Time-of-day and weather condition checks.
+                    String activeTime = activeTimeMap.getOrDefault(pos, "any");
+                    String activeWeather = activeWeatherMap.getOrDefault(pos, "any");
+                    if (!isValidTime(world, activeTime) || !isValidWeather(world, activeWeather)) {
+                        // Conditions not met — reschedule without growing.
+                        long nextTick = tickCounter + interval;
+                        nextGrowTick.put(pos, nextTick);
+                        growQueue.computeIfAbsent(nextTick, k -> new HashSet<>()).add(pos);
                         continue;
                     }
 
@@ -276,13 +308,17 @@ public class FarmScheduler {
                     if (!CropUtils.isFullyGrown(block)) {
                         debug("Growing " + block.getType() + " at "
                                 + pos.x() + "," + pos.y() + "," + pos.z());
-                        CropUtils.advanceGrowth(block);
+                        int maxHeight = maxHeightMap.getOrDefault(pos, 0);
+                        CropUtils.advanceGrowth(block, maxHeight);
                     }
 
                     // Re-check after growth.
                     if (CropUtils.isFullyGrown(block)) {
                         // Fully grown — untrack; replant handler re-tracks after harvest.
                         growIntervals.remove(pos);
+                        activeTimeMap.remove(pos);
+                        activeWeatherMap.remove(pos);
+                        maxHeightMap.remove(pos);
                         removeFromChunkTracking(pos.world(), pos);
                     } else {
                         // Schedule next grow cycle.
@@ -349,7 +385,7 @@ public class FarmScheduler {
                         if (CropUtils.isVerticalCrop(block.getType())
                                 && !CropUtils.isVerticalCropBottom(block)) continue;
                         if (!data.manages(block.getType())) continue;
-                        trackBlock(block, data.growInterval());
+                        trackBlock(block, data.growInterval(), data.activeTime(), data.activeWeather(), data.maxHeight());
                         foundCount++;
                     }
                 }
@@ -362,7 +398,7 @@ public class FarmScheduler {
     }
 
     /** Registers a block; no-ops if already scheduled. */
-    private void trackBlock(Block block, int interval) {
+    private void trackBlock(Block block, int interval, String activeTime, String activeWeather, int maxHeight) {
         BlockPos pos = posOf(block);
         if (nextGrowTick.containsKey(pos)) return;
 
@@ -373,9 +409,28 @@ public class FarmScheduler {
                      .add(pos);
 
         growIntervals.put(pos, interval);
+        activeTimeMap.put(pos, activeTime);
+        activeWeatherMap.put(pos, activeWeather);
+        maxHeightMap.put(pos, maxHeight);
         long nextTick = tickCounter + interval;
         nextGrowTick.put(pos, nextTick);
         growQueue.computeIfAbsent(nextTick, k -> new HashSet<>()).add(pos);
+    }
+
+    private boolean isValidTime(World world, String activeTime) {
+        return switch (activeTime) {
+            case "day" -> world.isDayTime();
+            case "night" -> !world.isDayTime();
+            default -> true;
+        };
+    }
+
+    private boolean isValidWeather(World world, String activeWeather) {
+        return switch (activeWeather) {
+            case "clear" -> !world.hasStorm() && !world.isThundering();
+            case "rain" -> world.hasStorm() || world.isThundering();
+            default -> true;
+        };
     }
 
     private void removeFromChunkTracking(String worldName, BlockPos pos) {

@@ -53,7 +53,12 @@ public class FarmBreakListener implements Listener {
         if (!CropUtils.isCrop(block)) {
             return;
         }
-        // Fully-grown crops may always be harvested.
+        // Vertical crops (sugar cane, bamboo, cactus, kelp, vines…) have no "mature" state
+        // and grow indefinitely — farm-protect-crops does not apply to them.
+        if (CropUtils.isVerticalCrop(type)) {
+            return;
+        }
+        // Fully-grown Ageable crops may always be harvested.
         if (CropUtils.isFullyGrown(block)) {
             return;
         }
@@ -69,9 +74,7 @@ public class FarmBreakListener implements Listener {
                 }
                 event.setCancelled(true);
                 if (event.getPlayer() != null) {
-                    event.getPlayer().sendMessage(
-                            net.kyori.adventure.text.Component.text(
-                                    "§cVous ne pouvez pas casser une plantation qui n'est pas encore mûre."));
+                    plugin.getLanguageConfig().send(event.getPlayer(), "farm-protect-immature");
                 }
                 return;
             }

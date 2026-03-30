@@ -3,8 +3,10 @@ package net.tylers1066.farm;
 import com.sk89q.worldguard.protection.flags.IntegerFlag;
 import com.sk89q.worldguard.protection.flags.SetFlag;
 import com.sk89q.worldguard.protection.flags.StateFlag;
+import com.sk89q.worldguard.protection.flags.StringFlag;
 import net.tylers1066.flags.helper.BlockMaterialFlag;
 import org.bukkit.Material;
+
 
 public class FarmFlags {
 
@@ -43,8 +45,42 @@ public class FarmFlags {
      */
     public static final StateFlag FARM_PROTECT_CROPS = new StateFlag("farm-protect-crops", false);
 
+    /**
+     * Time-of-day restriction for auto-grow: {@code "any"} (default), {@code "day"}, or {@code "night"}.
+     * Usage: {@code /rg flag <region> farm-active-time day}
+     */
+    public static final StringFlag FARM_ACTIVE_TIME = new StringFlag("farm-active-time");
+
+    /**
+     * Weather restriction for auto-grow: {@code "any"} (default), {@code "clear"}, or {@code "rain"}.
+     * Usage: {@code /rg flag <region> farm-active-weather clear}
+     */
+    public static final StringFlag FARM_ACTIVE_WEATHER = new StringFlag("farm-active-weather");
+
+    /**
+     * Maximum height for upward vertical crops (sugar cane, cactus, bamboo, kelp, twisting vines).
+     * Overrides the natural default height cap.
+     * Usage: {@code /rg flag <region> farm-max-height 5}
+     */
+    public static final IntegerFlag FARM_MAX_HEIGHT = new IntegerFlag("farm-max-height");
+
+    /**
+     * Global drop multiplier (%) for all crops broken in the region.
+     * 100 = normal, 200 = double, 50 = half, 0 = no drops.
+     * Overridden per-crop-type by {@link #FARM_DROP_RATES}.
+     * Usage: {@code /rg flag <region> farm-drop-multiplier 200}
+     */
+    public static final IntegerFlag FARM_DROP_MULTIPLIER = new IntegerFlag("farm-drop-multiplier");
+
+    /**
+     * Per-crop-type drop multipliers (%).  Format: {@code "type:percent,type:percent"}.
+     * Material names are case-insensitive.  Takes priority over {@link #FARM_DROP_MULTIPLIER}.
+     * Usage: {@code /rg flag <region> farm-drop-rates "wheat:300,carrots:150,potatoes:0"}
+     */
+    public static final StringFlag FARM_DROP_RATES = new StringFlag("farm-drop-rates");
+
     public static int count() {
-        return 5;
+        return 10;
     }
 
     private FarmFlags() {}

@@ -25,6 +25,7 @@ public class MobRegionCache {
      * @param levelMin     minimum spawn level
      * @param levelMax     maximum spawn level
      * @param spawnTime    time restriction: "any", "day", or "night"
+     * @param spawnWeather weather restriction: "any", "clear", or "rain"
      */
     public record MobSpawnData(
             Set<String> mobTypes,
@@ -34,7 +35,8 @@ public class MobRegionCache {
             int spawnCount,
             int levelMin,
             int levelMax,
-            String spawnTime
+            String spawnTime,
+            String spawnWeather
     ) {}
 
     /**
@@ -146,8 +148,15 @@ public class MobRegionCache {
             spawnTime = spawnTime.toLowerCase(java.util.Locale.ROOT);
         }
 
+        String spawnWeather = region.getFlag(MobSpawnFlags.MOB_SPAWN_WEATHER);
+        if (spawnWeather == null || spawnWeather.isBlank()) {
+            spawnWeather = "any";
+        } else {
+            spawnWeather = spawnWeather.toLowerCase(java.util.Locale.ROOT);
+        }
+
         return new MobSpawnData(mobTypes, true, interval, maxMobs, spawnCount,
-                levelMin, levelMax, spawnTime);
+                levelMin, levelMax, spawnTime, spawnWeather);
     }
 
     private int resolveInt(ProtectedRegion region,

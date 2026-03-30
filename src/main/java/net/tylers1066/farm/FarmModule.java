@@ -31,6 +31,7 @@ public class FarmModule {
         cache.rebuild(plugin.getPluginConfig());
         listener = new FarmBreakListener(plugin, cache, scheduler);
         plugin.getServer().getPluginManager().registerEvents(listener, plugin);
+        plugin.getServer().getPluginManager().registerEvents(new FarmDropListener(), plugin);
         scheduler.start();
         scheduler.queueLoadedChunksInRegions();
         plugin.getLogger().info("[FarmModule] Enabled — "

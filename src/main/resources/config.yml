@@ -1,14 +1,6 @@
 # WGBlockFlags Configuration
-# Plugin version: 2.0.0
-
-# Messages sent to players when actions are denied
-# Use {block} for block type, {player} for player name
-# Use color codes with & (e.g., &c for red, &a for green)
-# Set to empty string "" to disable the message
-messages:
-  deny-place: "&cYou are not allowed to place &e{block} &chere."
-  deny-break: "&cYou are not allowed to break &e{block} &chere."
-  deny-interact: "&cYou are not allowed to interact with &e{block} &chere."
+# Plugin version: 2.2.0
+# All player-facing messages are in language.yml
 
 # Debug mode - logs flag checks to console
 # Useful for troubleshooting flag configurations
@@ -67,3 +59,12 @@ mob-spawn:
   # Number of random positions to try when searching for a safe spawn location.
   # Increase if mobs frequently fail to spawn in regions with complex terrain.
   spawn-attempts: 20
+
+# ============================================================
+# Block Regeneration
+# ============================================================
+block-regen:
+  # Default ticks before a broken block regenerates.
+  # 20 ticks = 1 second.  1200 = 60 seconds.
+  # Per-region override: /rg flag <region> block-regen-delay <ticks>
+  default-delay: 1200

@@ -18,18 +18,24 @@ public class FarmRegionCache {
     /**
      * Immutable snapshot of a region's farm configuration, computed once at build time.
      *
-     * @param crops        the set of crop materials managed — empty means all crops
-     * @param autoGrow     whether auto-grow is active for this region
-     * @param growInterval ticks between forced growth cycles
-     * @param autoReplant  whether auto-replant is active for this region
-     * @param protectCrops whether non-mature crops are protected from breaking
+     * @param crops         the set of crop materials managed — empty means all crops
+     * @param autoGrow      whether auto-grow is active for this region
+     * @param growInterval  ticks between forced growth cycles
+     * @param autoReplant   whether auto-replant is active for this region
+     * @param protectCrops  whether non-mature crops are protected from breaking
+     * @param activeTime    time-of-day restriction: "any", "day", or "night"
+     * @param activeWeather weather restriction: "any", "clear", or "rain"
+     * @param maxHeight     max height for upward vertical crops; 0 = use crop defaults
      */
     public record FarmRegionData(
             Set<Material> crops,
             boolean autoGrow,
             int growInterval,
             boolean autoReplant,
-            boolean protectCrops
+            boolean protectCrops,
+            String activeTime,
+            String activeWeather,
+            int maxHeight
     ) {
         /** Returns true if the given material is managed by this farm region. */
         public boolean manages(Material material) {
@@ -146,6 +152,24 @@ public class FarmRegionCache {
         Set<Material> crops = rawCrops != null ? Collections.unmodifiableSet(new HashSet<>(rawCrops))
                 : Collections.emptySet();
 
-        return new FarmRegionData(crops, autoGrow, interval, autoReplant, protectCrops);
+        String activeTime = region.getFlag(FarmFlags.FARM_ACTIVE_TIME);
+        if (activeTime == null || activeTime.isBlank()) {
+            activeTime = "any";
+        } else {
+            activeTime = activeTime.toLowerCase(java.util.Locale.ROOT);
+        }
+
+        String activeWeather = region.getFlag(FarmFlags.FARM_ACTIVE_WEATHER);
+        if (activeWeather == null || activeWeather.isBlank()) {
+            activeWeather = "any";
+        } else {
+            activeWeather = activeWeather.toLowerCase(java.util.Locale.ROOT);
+        }
+
+        Integer maxHeightFlag = region.getFlag(FarmFlags.FARM_MAX_HEIGHT);
+        int maxHeight = (maxHeightFlag != null && maxHeightFlag > 0) ? maxHeightFlag : 0;
+
+        return new FarmRegionData(crops, autoGrow, interval, autoReplant, protectCrops,
+                activeTime, activeWeather, maxHeight);
     }
 }

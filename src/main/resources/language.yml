@@ -1,0 +1,28 @@
+# ============================================================
+# WGBlockFlags — Language Configuration
+# ============================================================
+# Supports & color codes (e.g. &c = red, &a = green, &e = yellow, &b = aqua)
+# Set any message to "" to disable it entirely.
+#
+# Placeholders:
+#   {block}  — the block/item material name
+#   {item}   — the item material name (pickup/drop messages)
+# ============================================================
+
+# --- Block restriction messages ---
+deny-place:    "&cYou are not allowed to place &e{block} &chere."
+deny-break:    "&cYou are not allowed to break &e{block} &chere."
+deny-interact: "&cYou are not allowed to interact with &e{block} &chere."
+
+# --- Item restriction messages ---
+deny-item-pickup: "&cYou cannot pick up &e{item} &chere."
+deny-item-drop:   "&cYou cannot drop &e{item} &chere."
+
+# --- Farm messages ---
+# Shown when a player tries to break an immature crop in a farm-protect-crops region.
+farm-protect-immature: "&cYou cannot harvest this crop before it is fully grown."
+
+# --- Command messages ---
+cmd-no-permission:     "&cYou do not have permission to use this command."
+cmd-reload-success:    "&aWGBlockFlags configuration reloaded."
+cmd-unknown-subcommand: "&cUnknown subcommand. Use &e/wgbf help&c."
