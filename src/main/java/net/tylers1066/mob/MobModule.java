@@ -21,6 +21,8 @@ public class MobModule {
     private MobSpawnManager manager;
     /** Guard against registering MobDropListener more than once. */
     private boolean dropListenerRegistered = false;
+    /** Guard against registering MobSpawnFilterListener more than once. */
+    private boolean filterListenerRegistered = false;
 
     public MobModule(WGBlockFlags plugin) {
         this.plugin = plugin;
@@ -38,12 +40,20 @@ public class MobModule {
             dropListenerRegistered = true;
         }
 
-        // Build cache for spawn filter listener (works independently of MythicMobs)
-        cache = new MobRegionCache();
+        // Build (or rebuild) the shared cache. We keep the same instance across
+        // enable()/reload() calls so the already-registered filter listener continues
+        // to reference valid data after a reload.
+        if (cache == null) {
+            cache = new MobRegionCache();
+        }
         cache.rebuild(plugin.getPluginConfig());
 
         // Spawn filter listener works independently of MythicMobs presence.
-        plugin.getServer().getPluginManager().registerEvents(new MobSpawnFilterListener(cache), plugin);
+        // Guard prevents double-registration when reload() falls back to enable().
+        if (!filterListenerRegistered) {
+            plugin.getServer().getPluginManager().registerEvents(new MobSpawnFilterListener(cache), plugin);
+            filterListenerRegistered = true;
+        }
 
         adapter = resolveMythicAdapter();
         if (!adapter.isAvailable()) {
