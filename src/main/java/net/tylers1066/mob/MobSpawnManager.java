@@ -71,6 +71,17 @@ public class MobSpawnManager {
     // -------------------------------------------------------------------------
 
     private void tick() {
+        try {
+            tickInternal();
+        } catch (Exception e) {
+            plugin.getLogger().severe("[MobSpawn] Uncaught error in spawn tick — task kept alive: " + e.getMessage());
+            if (plugin.getPluginConfig().isDebugMob()) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void tickInternal() {
         for (World world : plugin.getServer().getWorlds()) {
             long currentTick = world.getFullTime();
             List<RegionEntry> entries = cache.getAutoSpawnEntries(world.getName());
@@ -123,11 +134,7 @@ public class MobSpawnManager {
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
             if (loc == null) {
-                if (plugin.getPluginConfig().isDebugMob()) {
-                    plugin.getLogger().warning("[MobSpawn] No safe location found in region '"
-                            + region.getId() + "' after " + attempts + " attempts —"
-                            + " check that the region has loaded chunks and solid ground.");
-                }
+                // findSafeLocation already logged the specific reason (no chunks / no terrain).
                 break;
             }
             String mobType = types.get(rng().nextInt(types.size()));
@@ -148,16 +155,15 @@ public class MobSpawnManager {
     }
 
     /**
-     * Searches for a safe spawn location inside the region by trying random
-     * positions within <em>loaded</em> chunks only.
+     * Searches for a safe spawn location inside the region by trying random positions.
+     * Chunks are loaded synchronously on demand so that zones spawn even with no
+     * nearby players.
      *
      * <p>Strategy:
      * <ol>
-     *   <li>Enumerate every chunk column that overlaps the region bounding box
-     *       and is currently loaded. This is O(region_chunks) but avoids wasting
-     *       all {@code attempts} on unloaded-chunk positions in large zones.</li>
-     *   <li>Pick a random loaded chunk, then a random (x,z) inside it, clamped
-     *       to the region bounding box.</li>
+     *   <li>Enumerate all chunk columns overlapping the region bounding box.</li>
+     *   <li>Pick a random column, then a random (x,z) clamped to the region bbox.</li>
+     *   <li>Load the chunk if not already loaded ({@code getChunkAt} is safe on the main thread).</li>
      *   <li>Scan downward for a solid ground block with two passable blocks
      *       above it, with the spawn point (y+1) inside the region.</li>
      * </ol>
@@ -169,26 +175,28 @@ public class MobSpawnManager {
         BlockVector3 min = region.getMinimumPoint();
         BlockVector3 max = region.getMaximumPoint();
 
-        // Collect loaded chunk columns that overlap the region.
-        List<int[]> loadedChunks = new ArrayList<>();
+        // Collect all chunk columns that overlap the region bounding box.
+        // Chunks are loaded on demand (synchronous on the main thread, safe) so that
+        // mob zones can spawn even when no player is nearby.
+        List<int[]> chunks = new ArrayList<>();
         for (int cx = min.x() >> 4; cx <= max.x() >> 4; cx++) {
             for (int cz = min.z() >> 4; cz <= max.z() >> 4; cz++) {
-                if (world.isChunkLoaded(cx, cz)) {
-                    loadedChunks.add(new int[]{cx, cz});
-                }
+                chunks.add(new int[]{cx, cz});
             }
-        }
-        if (loadedChunks.isEmpty()) {
-            debug("[MobSpawn] Region '" + region.getId() + "' has no loaded chunks — skipping.");
-            return null;
         }
 
         ThreadLocalRandom rng = rng();
         for (int attempt = 0; attempt < attempts; attempt++) {
-            // Pick a random loaded chunk, then a random position inside it, clamped to region bounds.
-            int[] col = loadedChunks.get(rng.nextInt(loadedChunks.size()));
+            // Pick a random chunk column, then a random position inside it, clamped to region bounds.
+            int[] col = chunks.get(rng.nextInt(chunks.size()));
             int x = Math.max(min.x(), Math.min(max.x(), col[0] * 16 + rng.nextInt(16)));
             int z = Math.max(min.z(), Math.min(max.z(), col[1] * 16 + rng.nextInt(16)));
+
+            // Ensure the chunk is loaded before accessing blocks.
+            // getChunkAt() loads it synchronously if needed (disk cache, ~1-5 ms).
+            if (!world.isChunkLoaded(col[0], col[1])) {
+                world.getChunkAt(col[0], col[1]);
+            }
 
             // Scan downward for solid ground + two passable blocks above.
             // The spawn point (y+1, mob's feet) must be inside the region.
@@ -205,6 +213,10 @@ public class MobSpawnManager {
                 }
             }
         }
+        // All attempts exhausted — no valid ground found.
+        plugin.getLogger().warning("[MobSpawn] No valid spawn position in region '"
+                + region.getId() + "' after " + attempts + " attempts. "
+                + "Check that the region has accessible solid ground.");
         return null;
     }
 
