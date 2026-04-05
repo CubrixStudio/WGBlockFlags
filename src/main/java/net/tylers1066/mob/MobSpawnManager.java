@@ -120,64 +120,82 @@ public class MobSpawnManager {
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
             if (loc == null) {
-                debug("[MobSpawn] No safe location found in region '" + region.getId()
-                        + "' after " + attempts + " attempts — skipping cycle.");
+                if (plugin.getPluginConfig().isDebug()) {
+                    plugin.getLogger().warning("[MobSpawn] No safe location found in region '"
+                            + region.getId() + "' after " + attempts + " attempts —"
+                            + " check that the region has loaded chunks and solid ground.");
+                }
                 break;
             }
             String mobType = types.get(rng().nextInt(types.size()));
             double level = resolveLevel(data.levelMin(), data.levelMax());
             boolean spawned = adapter.spawnMob(mobType, loc, level).isPresent();
-            debug("[MobSpawn] " + (spawned ? "Spawned" : "FAILED to spawn") + " '" + mobType
-                    + "' at " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
-                    + " in region '" + region.getId() + "'.");
+            if (plugin.getPluginConfig().isDebug()) {
+                if (spawned) {
+                    debug("[MobSpawn] Spawned '" + mobType + "' at "
+                            + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
+                            + " in region '" + region.getId() + "'.");
+                } else {
+                    plugin.getLogger().warning("[MobSpawn] FAILED to spawn '" + mobType
+                            + "' in region '" + region.getId() + "' — check that the mob name"
+                            + " matches exactly (case-sensitive) the MythicMobs mob internal name.");
+                }
+            }
         }
     }
 
     /**
      * Searches for a safe spawn location inside the region by trying random
-     * (x, z) positions and scanning downward for a solid ground block with
-     * two passable blocks above it.
+     * positions within <em>loaded</em> chunks only.
      *
-     * <p>Only considers positions in loaded chunks to avoid forcing async chunk
-     * loads on the main thread and to match natural mob-spawn behaviour
-     * (mobs never spawn in unloaded chunks).
+     * <p>Strategy:
+     * <ol>
+     *   <li>Enumerate every chunk column that overlaps the region bounding box
+     *       and is currently loaded. This is O(region_chunks) but avoids wasting
+     *       all {@code attempts} on unloaded-chunk positions in large zones.</li>
+     *   <li>Pick a random loaded chunk, then a random (x,z) inside it, clamped
+     *       to the region bounding box.</li>
+     *   <li>Scan downward for a solid ground block with two passable blocks
+     *       above it, with the spawn point (y+1) inside the region.</li>
+     * </ol>
      *
-     * @param attempts number of random (x, z) positions to try before giving up
+     * @param attempts number of random positions to try before giving up
      * @return a safe {@link Location} inside the region, or {@code null} if none found
      */
     private @Nullable Location findSafeLocation(World world, ProtectedRegion region, int attempts) {
         BlockVector3 min = region.getMinimumPoint();
         BlockVector3 max = region.getMaximumPoint();
 
-        int rangeX = max.x() - min.x();
-        int rangeZ = max.z() - min.z();
-
-        if (rangeX < 0 || rangeZ < 0) {
+        // Collect loaded chunk columns that overlap the region.
+        List<int[]> loadedChunks = new ArrayList<>();
+        for (int cx = min.x() >> 4; cx <= max.x() >> 4; cx++) {
+            for (int cz = min.z() >> 4; cz <= max.z() >> 4; cz++) {
+                if (world.isChunkLoaded(cx, cz)) {
+                    loadedChunks.add(new int[]{cx, cz});
+                }
+            }
+        }
+        if (loadedChunks.isEmpty()) {
+            debug("[MobSpawn] Region '" + region.getId() + "' has no loaded chunks — skipping.");
             return null;
         }
 
+        ThreadLocalRandom rng = rng();
         for (int attempt = 0; attempt < attempts; attempt++) {
-            int x = min.x() + (rangeX > 0 ? rng().nextInt(rangeX + 1) : 0);
-            int z = min.z() + (rangeZ > 0 ? rng().nextInt(rangeZ + 1) : 0);
+            // Pick a random loaded chunk, then a random position inside it, clamped to region bounds.
+            int[] col = loadedChunks.get(rng.nextInt(loadedChunks.size()));
+            int x = Math.max(min.x(), Math.min(max.x(), col[0] * 16 + rng.nextInt(16)));
+            int z = Math.max(min.z(), Math.min(max.z(), col[1] * 16 + rng.nextInt(16)));
 
-            // Skip positions in unloaded chunks — reading block data from an unloaded
-            // chunk forces a synchronous load on the main thread and always returns AIR,
-            // which would make isSolidGround() fail for every block.
-            if (!world.isChunkLoaded(x >> 4, z >> 4)) {
-                continue;
-            }
-
-            // Scan downward from the region ceiling to find a valid ground position.
-            // We need: solid block at y, passable at y+1 (feet) and y+2 (head),
-            // and the spawn point (y+1) must be inside the region.
+            // Scan downward for solid ground + two passable blocks above.
+            // The spawn point (y+1, mob's feet) must be inside the region.
             for (int y = max.y() - 1; y >= min.y(); y--) {
-                // The spawn point (mob's feet) must be inside the region.
                 if (!region.contains(x, y + 1, z)) {
                     continue;
                 }
                 Block ground = world.getBlockAt(x, y, z);
-                Block feet  = world.getBlockAt(x, y + 1, z);
-                Block head  = world.getBlockAt(x, y + 2, z);
+                Block feet   = world.getBlockAt(x, y + 1, z);
+                Block head   = world.getBlockAt(x, y + 2, z);
 
                 if (isSolidGround(ground) && isPassable(feet) && isPassable(head)) {
                     return new Location(world, x + 0.5, y + 1, z + 0.5);
