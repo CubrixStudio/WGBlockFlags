@@ -8,6 +8,7 @@ import net.tylers1066.mob.MobRegionCache.RegionEntry;
 import net.tylers1066.mob.mythic.MythicAdapter;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.jetbrains.annotations.Nullable;
@@ -101,6 +102,8 @@ public class MobSpawnManager {
                 int current = adapter.countMobsInRegion(world, entry.region(), data.mobTypes());
                 int toSpawn = Math.min(data.spawnCount(), data.maxMobs() - current);
                 if (toSpawn <= 0) {
+                    debug("[MobSpawn] Region '" + entry.region().getId() + "' at capacity ("
+                            + current + "/" + data.maxMobs() + ") — skipping cycle.");
                     continue;
                 }
 
@@ -234,8 +237,13 @@ public class MobSpawnManager {
 
     private boolean isSolidGround(Block block) {
         Material type = block.getType();
-        return type.isSolid() && !type.isAir()
-                && type != Material.WATER && type != Material.LAVA;
+        if (!type.isSolid() || type.isAir()) return false;
+        if (type == Material.WATER || type == Material.LAVA) return false;
+        // Exclude tree components — leaves and logs are technically "solid" in the
+        // Bukkit API but mobs should never spawn on top of them.
+        if (Tag.LEAVES.isTagged(type)) return false;
+        if (Tag.LOGS.isTagged(type)) return false;
+        return true;
     }
 
     private boolean isPassable(Block block) {
