@@ -123,11 +123,7 @@ public class MobSpawnManager {
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
             if (loc == null) {
-                if (plugin.getPluginConfig().isDebugMob()) {
-                    plugin.getLogger().warning("[MobSpawn] No safe location found in region '"
-                            + region.getId() + "' after " + attempts + " attempts —"
-                            + " check that the region has loaded chunks and solid ground.");
-                }
+                // findSafeLocation already logged the specific reason (no chunks / no terrain).
                 break;
             }
             String mobType = types.get(rng().nextInt(types.size()));
@@ -205,6 +201,11 @@ public class MobSpawnManager {
                 }
             }
         }
+        // All attempts exhausted — terrain issue (chunks were loaded but no valid ground found).
+        plugin.getLogger().warning("[MobSpawn] No valid spawn position in region '"
+                + region.getId() + "' after " + attempts + " attempts across "
+                + loadedChunks.size() + " loaded chunk(s). "
+                + "Check that the region has accessible solid ground.");
         return null;
     }
 
