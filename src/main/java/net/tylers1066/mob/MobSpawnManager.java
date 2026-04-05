@@ -120,22 +120,30 @@ public class MobSpawnManager {
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
             if (loc == null) {
-                // No valid position found — skip remaining mobs for this cycle
+                debug("[MobSpawn] No safe location found in region '" + region.getId()
+                        + "' after " + attempts + " attempts — skipping cycle.");
                 break;
             }
             String mobType = types.get(rng().nextInt(types.size()));
             double level = resolveLevel(data.levelMin(), data.levelMax());
-            adapter.spawnMob(mobType, loc, level);
+            boolean spawned = adapter.spawnMob(mobType, loc, level).isPresent();
+            debug("[MobSpawn] " + (spawned ? "Spawned" : "FAILED to spawn") + " '" + mobType
+                    + "' at " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
+                    + " in region '" + region.getId() + "'.");
         }
     }
 
     /**
      * Searches for a safe spawn location inside the region by trying random
      * (x, z) positions and scanning downward for a solid ground block with
-     * two air blocks above it.
+     * two passable blocks above it.
      *
-     * @param attempts number of random positions to try before giving up
-     * @return a safe {@link Location}, or {@code null} if none found
+     * <p>Only considers positions in loaded chunks to avoid forcing async chunk
+     * loads on the main thread and to match natural mob-spawn behaviour
+     * (mobs never spawn in unloaded chunks).
+     *
+     * @param attempts number of random (x, z) positions to try before giving up
+     * @return a safe {@link Location} inside the region, or {@code null} if none found
      */
     private @Nullable Location findSafeLocation(World world, ProtectedRegion region, int attempts) {
         BlockVector3 min = region.getMinimumPoint();
@@ -152,16 +160,26 @@ public class MobSpawnManager {
             int x = min.x() + (rangeX > 0 ? rng().nextInt(rangeX + 1) : 0);
             int z = min.z() + (rangeZ > 0 ? rng().nextInt(rangeZ + 1) : 0);
 
-            // Scan downward from the region ceiling to find a valid ground position
-            for (int y = max.y(); y > min.y(); y--) {
-                if (!region.contains(x, y, z)) {
+            // Skip positions in unloaded chunks — reading block data from an unloaded
+            // chunk forces a synchronous load on the main thread and always returns AIR,
+            // which would make isSolidGround() fail for every block.
+            if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+                continue;
+            }
+
+            // Scan downward from the region ceiling to find a valid ground position.
+            // We need: solid block at y, passable at y+1 (feet) and y+2 (head),
+            // and the spawn point (y+1) must be inside the region.
+            for (int y = max.y() - 1; y >= min.y(); y--) {
+                // The spawn point (mob's feet) must be inside the region.
+                if (!region.contains(x, y + 1, z)) {
                     continue;
                 }
                 Block ground = world.getBlockAt(x, y, z);
-                Block above1 = world.getBlockAt(x, y + 1, z);
-                Block above2 = world.getBlockAt(x, y + 2, z);
+                Block feet  = world.getBlockAt(x, y + 1, z);
+                Block head  = world.getBlockAt(x, y + 2, z);
 
-                if (isSolidGround(ground) && isPassable(above1) && isPassable(above2)) {
+                if (isSolidGround(ground) && isPassable(feet) && isPassable(head)) {
                     return new Location(world, x + 0.5, y + 1, z + 0.5);
                 }
             }
@@ -204,5 +222,11 @@ public class MobSpawnManager {
 
     private boolean isPassable(Block block) {
         return block.isPassable();
+    }
+
+    private void debug(String msg) {
+        if (plugin.getPluginConfig().isDebug()) {
+            plugin.getLogger().info(msg);
+        }
     }
 }
