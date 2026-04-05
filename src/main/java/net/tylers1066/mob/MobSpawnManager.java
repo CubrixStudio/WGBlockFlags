@@ -123,7 +123,7 @@ public class MobSpawnManager {
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
             if (loc == null) {
-                if (plugin.getPluginConfig().isDebug()) {
+                if (plugin.getPluginConfig().isDebugMob()) {
                     plugin.getLogger().warning("[MobSpawn] No safe location found in region '"
                             + region.getId() + "' after " + attempts + " attempts —"
                             + " check that the region has loaded chunks and solid ground.");
@@ -133,7 +133,7 @@ public class MobSpawnManager {
             String mobType = types.get(rng().nextInt(types.size()));
             double level = resolveLevel(data.levelMin(), data.levelMax());
             boolean spawned = adapter.spawnMob(mobType, loc, level).isPresent();
-            if (plugin.getPluginConfig().isDebug()) {
+            if (plugin.getPluginConfig().isDebugMob()) {
                 if (spawned) {
                     debug("[MobSpawn] Spawned '" + mobType + "' at "
                             + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
@@ -251,7 +251,7 @@ public class MobSpawnManager {
     }
 
     private void debug(String msg) {
-        if (plugin.getPluginConfig().isDebug()) {
+        if (plugin.getPluginConfig().isDebugMob()) {
             plugin.getLogger().info(msg);
         }
     }

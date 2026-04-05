@@ -110,7 +110,7 @@ public abstract class AbstractBlockListener implements Listener {
     }
 
     protected void debug(String msg) {
-        if (plugin.getPluginConfig().isDebug()) {
+        if (plugin.getPluginConfig().isDebugBlocks()) {
             plugin.getLogger().info("[DEBUG] " + msg);
         }
     }

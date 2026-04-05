@@ -330,7 +330,7 @@ public class FarmScheduler {
             }
         }
 
-        if (plugin.getPluginConfig().isDebug() && tickCounter % 200 == 0) {
+        if (plugin.getPluginConfig().isDebugFarm() && tickCounter % 200 == 0) {
             debug("Tick #" + tickCounter + " — tracking " + getTrackedCount()
                     + " block(s), " + pendingScans.size() + " chunk(s) pending scan");
         }
@@ -447,7 +447,7 @@ public class FarmScheduler {
     }
 
     private void debug(String msg) {
-        if (plugin.getPluginConfig().isDebug()) {
+        if (plugin.getPluginConfig().isDebugFarm()) {
             plugin.getLogger().info("[FarmDebug] " + msg);
         }
     }

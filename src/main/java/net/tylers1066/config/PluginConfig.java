@@ -5,7 +5,9 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class PluginConfig {
-    private final boolean debug;
+    private final boolean debugFarm;
+    private final boolean debugMob;
+    private final boolean debugBlocks;
     private final long messageCooldownMs;
 
     // Farm settings
@@ -27,7 +29,9 @@ public class PluginConfig {
 
     public PluginConfig(JavaPlugin plugin) {
         FileConfiguration config = plugin.getConfig();
-        this.debug = config.getBoolean("debug", false);
+        this.debugFarm   = config.getBoolean("debug.farm",   false);
+        this.debugMob    = config.getBoolean("debug.mob",    false);
+        this.debugBlocks = config.getBoolean("debug.blocks", false);
         this.messageCooldownMs = config.getLong("message-cooldown", 2) * 1000L;
 
         this.blockRegenDefaultDelay = config.getInt("block-regen.default-delay", 1200);
@@ -45,8 +49,24 @@ public class PluginConfig {
         this.mobSpawnAttempts = config.getInt("mob-spawn.spawn-attempts", 20);
     }
 
-    public boolean isDebug() {
-        return debug;
+    /** Returns true if debug logging is enabled for farm zones (crop growth, chunk scanning). */
+    public boolean isDebugFarm() {
+        return debugFarm;
+    }
+
+    /** Returns true if debug logging is enabled for mob spawn zones. */
+    public boolean isDebugMob() {
+        return debugMob;
+    }
+
+    /** Returns true if debug logging is enabled for block flag checks (place/break/interact). */
+    public boolean isDebugBlocks() {
+        return debugBlocks;
+    }
+
+    /** Returns true if ANY debug category is enabled (convenience for /wgbf info). */
+    public boolean isAnyDebugEnabled() {
+        return debugFarm || debugMob || debugBlocks;
     }
 
     public long getMessageCooldownMs() {

@@ -2,9 +2,15 @@
 # Plugin version: 2.2.0
 # All player-facing messages are in language.yml
 
-# Debug mode - logs flag checks to console
-# Useful for troubleshooting flag configurations
-debug: false
+# Debug logging — enable per category to avoid log flooding.
+# Each category is independent; you can mix and match.
+debug:
+  # Crop growth, auto-replant, chunk scanning (very verbose during reload)
+  farm: false
+  # Mob spawn zones: spawn cycles, population caps, safe-location search
+  mob: false
+  # Block flag checks: allow/deny place, break, interact
+  blocks: false
 
 # Cooldown for deny messages in seconds (prevents message spam)
 # Set to 0 to send every time

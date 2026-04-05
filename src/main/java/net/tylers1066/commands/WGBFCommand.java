@@ -5,6 +5,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.tylers1066.WGBlockFlags;
 import net.tylers1066.config.LanguageConfig;
+import net.tylers1066.config.PluginConfig;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -72,9 +73,19 @@ public class WGBFCommand implements CommandExecutor {
                 .append(Component.text(" v" + plugin.getDescription().getVersion(), NamedTextColor.YELLOW)));
         sender.sendMessage(Component.text("Flags registered: ", NamedTextColor.GRAY)
                 .append(Component.text("8", NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("Debug mode: ", NamedTextColor.GRAY)
-                .append(Component.text(plugin.getPluginConfig().isDebug() ? "Enabled" : "Disabled",
-                        plugin.getPluginConfig().isDebug() ? NamedTextColor.GREEN : NamedTextColor.RED)));
+        PluginConfig cfg = plugin.getPluginConfig();
+        sender.sendMessage(Component.text("Debug: ", NamedTextColor.GRAY)
+                .append(debugStatus("farm",   cfg.isDebugFarm()))
+                .append(Component.text("  "))
+                .append(debugStatus("mob",    cfg.isDebugMob()))
+                .append(Component.text("  "))
+                .append(debugStatus("blocks", cfg.isDebugBlocks())));
         sender.sendMessage(Component.empty());
+    }
+
+    private static Component debugStatus(String label, boolean enabled) {
+        return Component.text(label + ": ", NamedTextColor.GRAY)
+                .append(Component.text(enabled ? "ON" : "OFF",
+                        enabled ? NamedTextColor.GREEN : NamedTextColor.RED));
     }
 }
