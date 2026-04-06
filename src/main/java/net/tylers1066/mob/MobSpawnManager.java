@@ -11,6 +11,7 @@ import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -44,7 +45,7 @@ public class MobSpawnManager {
     /** Incremented on every scheduler fire — lets the heartbeat log confirm the task is alive. */
     private int tickCounter = 0;
 
-    private int taskId = -1;
+    private BukkitTask task = null;
 
     public MobSpawnManager(WGBlockFlags plugin, MobRegionCache cache, MythicAdapter adapter) {
         this.plugin = plugin;
@@ -57,16 +58,21 @@ public class MobSpawnManager {
     // -------------------------------------------------------------------------
 
     public void start() {
-        taskId = plugin.getServer().getScheduler()
-                .scheduleSyncRepeatingTask(plugin, this::tick, 0L, TASK_PERIOD_TICKS);
+        // Use runTaskTimer (non-deprecated) instead of scheduleSyncRepeatingTask.
+        // delay=1 avoids firing during the same tick as start() — useful during
+        // server startup when WorldGuard regions may not yet be fully loaded.
+        task = plugin.getServer().getScheduler()
+                .runTaskTimer(plugin, this::tick, 1L, TASK_PERIOD_TICKS);
+        plugin.getLogger().info("[MobSpawn] Scheduler started (taskId=" + task.getTaskId() + ").");
     }
 
     public void stop() {
-        if (taskId != -1) {
-            plugin.getServer().getScheduler().cancelTask(taskId);
-            taskId = -1;
+        if (task != null) {
+            task.cancel();
+            task = null;
         }
         lastSpawnTick.clear();
+        plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
 
     // -------------------------------------------------------------------------
@@ -74,6 +80,13 @@ public class MobSpawnManager {
     // -------------------------------------------------------------------------
 
     private void tick() {
+        // Increment and heartbeat OUTSIDE try-catch so we always see it,
+        // even if tickInternal() is somehow aborting before its own logs.
+        tickCounter++;
+        // Heartbeat every 20 fires (= 400 ticks = 20 s) when debug.mob is on.
+        if (plugin.getPluginConfig().isDebugMob() && tickCounter % 20 == 0) {
+            plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter);
+        }
         try {
             tickInternal();
         } catch (Throwable e) {
@@ -86,11 +99,6 @@ public class MobSpawnManager {
     }
 
     private void tickInternal() {
-        tickCounter++;
-        // Heartbeat: one line every ~5 seconds so we can confirm the scheduler is alive.
-        if (plugin.getPluginConfig().isDebugMob() && tickCounter % 100 == 0) {
-            plugin.getLogger().info("[MobSpawn] Scheduler heartbeat tick #" + tickCounter);
-        }
         for (World world : plugin.getServer().getWorlds()) {
             long currentTick = world.getFullTime();
             List<RegionEntry> entries = cache.getAutoSpawnEntries(world.getName());
