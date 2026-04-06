@@ -74,10 +74,10 @@ public class MobSpawnManager {
         try {
             tickInternal();
         } catch (Exception e) {
-            plugin.getLogger().severe("[MobSpawn] Uncaught error in spawn tick — task kept alive: " + e.getMessage());
-            if (plugin.getPluginConfig().isDebugMob()) {
-                e.printStackTrace();
-            }
+            // Always print full stack trace — a SEVERE error must be visible even
+            // without debug.mob, and getMessage() returns null for NPE/etc.
+            plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
+            e.printStackTrace();
         }
     }
 
@@ -88,21 +88,31 @@ public class MobSpawnManager {
 
             for (RegionEntry entry : entries) {
                 MobSpawnData data = entry.spawnData();
-                String key = world.getName() + ":" + entry.region().getId();
+                String regionId = entry.region().getId();
+                String key = world.getName() + ":" + regionId;
 
                 long last = lastSpawnTick.getOrDefault(key, 0L);
-                if (currentTick - last < data.spawnInterval()) {
-                    continue;
+                long elapsed = currentTick - last;
+                if (elapsed < data.spawnInterval()) {
+                    continue; // Interval not yet reached — most common path, no logging.
                 }
 
+                // Interval has elapsed — log that we are evaluating this zone.
+                debug("[MobSpawn] Zone '" + regionId + "': interval elapsed ("
+                        + elapsed + "/" + data.spawnInterval() + " ticks), evaluating...");
+
                 // Check time-of-day and weather conditions BEFORE advancing the timer.
-                // If conditions are not met the timer is not reset, so we will retry
-                // on the next scheduler fire (every TASK_PERIOD_TICKS ticks) rather
-                // than waiting a full interval before trying again.
+                // If conditions are not met the timer is not reset, so the zone will
+                // be re-evaluated on the next scheduler fire rather than waiting a
+                // full interval before trying again.
                 if (!isValidTime(world, data.spawnTime())) {
+                    debug("[MobSpawn] Zone '" + regionId + "': skipped — time restriction '"
+                            + data.spawnTime() + "'.");
                     continue;
                 }
                 if (!isValidWeather(world, data.spawnWeather())) {
+                    debug("[MobSpawn] Zone '" + regionId + "': skipped — weather restriction '"
+                            + data.spawnWeather() + "'.");
                     continue;
                 }
 
@@ -113,11 +123,13 @@ public class MobSpawnManager {
                 int current = adapter.countMobsInRegion(world, entry.region(), data.mobTypes());
                 int toSpawn = Math.min(data.spawnCount(), data.maxMobs() - current);
                 if (toSpawn <= 0) {
-                    debug("[MobSpawn] Region '" + entry.region().getId() + "' at capacity ("
+                    debug("[MobSpawn] Zone '" + regionId + "': at capacity ("
                             + current + "/" + data.maxMobs() + ") — skipping cycle.");
                     continue;
                 }
 
+                debug("[MobSpawn] Zone '" + regionId + "': spawning " + toSpawn
+                        + " mob(s) (" + current + "/" + data.maxMobs() + " present).");
                 spawnBatch(world, entry.region(), data, toSpawn);
             }
         }
