@@ -39,8 +39,15 @@ public class MobSpawnManager {
     // Use ThreadLocalRandom — no contention, no object allocation each use.
     private static ThreadLocalRandom rng() { return ThreadLocalRandom.current(); }
 
-    /** Last spawn tick per region key ({@code "worldName:regionId"}). Uses {@link World#getFullTime()}. */
-    private final Map<String, Long> lastSpawnTick = new HashMap<>();
+    /**
+     * Remaining ticks before the next spawn cycle per region key ({@code "worldName:regionId"}).
+     * Decremented by {@link #TASK_PERIOD_TICKS} on every scheduler fire.
+     * When it reaches 0 (or below), a spawn cycle is attempted and the counter
+     * is reset to the region's configured spawn interval.
+     * Using a countdown avoids relying on {@code world.getFullTime()} which can
+     * behave unexpectedly during server startup or across world reloads.
+     */
+    private final Map<String, Integer> countdown = new HashMap<>();
 
     /** Incremented on every scheduler fire — lets the heartbeat log confirm the task is alive. */
     private int tickCounter = 0;
@@ -71,7 +78,7 @@ public class MobSpawnManager {
             task.cancel();
             task = null;
         }
-        lastSpawnTick.clear();
+        countdown.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
 
@@ -100,7 +107,6 @@ public class MobSpawnManager {
 
     private void tickInternal() {
         for (World world : plugin.getServer().getWorlds()) {
-            long currentTick = world.getFullTime();
             List<RegionEntry> entries = cache.getAutoSpawnEntries(world.getName());
 
             for (RegionEntry entry : entries) {
@@ -108,33 +114,36 @@ public class MobSpawnManager {
                 String regionId = entry.region().getId();
                 String key = world.getName() + ":" + regionId;
 
-                long last = lastSpawnTick.getOrDefault(key, 0L);
-                long elapsed = currentTick - last;
-                if (elapsed < data.spawnInterval()) {
-                    continue; // Interval not yet reached — most common path, no logging.
+                // Decrement the per-zone countdown by the scheduler period.
+                // A countdown of 0 (or absent) means "ready to spawn now".
+                int remaining = countdown.getOrDefault(key, 0) - TASK_PERIOD_TICKS;
+
+                if (remaining > 0) {
+                    countdown.put(key, remaining);
+                    continue; // Not yet time — most common path, no logging.
                 }
 
-                // Interval has elapsed — log that we are evaluating this zone.
-                debug("[MobSpawn] Zone '" + regionId + "': interval elapsed ("
-                        + elapsed + "/" + data.spawnInterval() + " ticks), evaluating...");
+                // Countdown reached 0 — evaluate this zone.
+                debug("[MobSpawn] Zone '" + regionId + "': ready to spawn, evaluating...");
 
-                // Check time-of-day and weather conditions BEFORE advancing the timer.
-                // If conditions are not met the timer is not reset, so the zone will
-                // be re-evaluated on the next scheduler fire rather than waiting a
-                // full interval before trying again.
+                // Check time-of-day and weather conditions BEFORE resetting the timer.
+                // If conditions are not met the countdown is left at 0 so the zone is
+                // re-checked on the very next scheduler fire.
                 if (!isValidTime(world, data.spawnTime())) {
                     debug("[MobSpawn] Zone '" + regionId + "': skipped — time restriction '"
                             + data.spawnTime() + "'.");
+                    countdown.put(key, 0);
                     continue;
                 }
                 if (!isValidWeather(world, data.spawnWeather())) {
                     debug("[MobSpawn] Zone '" + regionId + "': skipped — weather restriction '"
                             + data.spawnWeather() + "'.");
+                    countdown.put(key, 0);
                     continue;
                 }
 
-                // Conditions met — advance the timer now to prevent rapid re-spawning.
-                lastSpawnTick.put(key, currentTick);
+                // Conditions met — reset the timer immediately to prevent rapid re-spawning.
+                countdown.put(key, data.spawnInterval());
 
                 // Population check
                 int current = adapter.countMobsInRegion(world, entry.region(), data.mobTypes());
