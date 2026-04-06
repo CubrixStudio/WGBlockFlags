@@ -1,13 +1,14 @@
 package net.tylers1066.mob.mythic;
 
+import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
-import io.lumine.mythic.api.adapters.AbstractEntity;
 import io.lumine.mythic.api.mobs.MythicMob;
 import io.lumine.mythic.bukkit.BukkitAdapter;
 import io.lumine.mythic.bukkit.MythicBukkit;
 import io.lumine.mythic.core.mobs.ActiveMob;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collection;
@@ -51,25 +52,44 @@ public class MythicV5Adapter implements MythicAdapter {
     public int countMobsInRegion(@NotNull World world,
                                  @NotNull ProtectedRegion region,
                                  @NotNull Set<String> mobTypes) {
-        // Pre-normalise the requested mob types once so the inner loop stays cheap.
+        // Use Bukkit's spatial entity API to find candidates within the region
+        // bounding box, then look each one up in MythicMobs by UUID.
+        // This is more reliable than iterating getActiveMobs(), which can lag
+        // behind freshly-spawned entities.
+        BlockVector3 min = region.getMinimumPoint();
+        BlockVector3 max = region.getMaximumPoint();
+
+        double cx = (min.x() + max.x()) / 2.0;
+        double cy = (min.y() + max.y()) / 2.0;
+        double cz = (min.z() + max.z()) / 2.0;
+        double rx = (max.x() - min.x()) / 2.0 + 1;
+        double ry = (max.y() - min.y()) / 2.0 + 1;
+        double rz = (max.z() - min.z()) / 2.0 + 1;
+
+        Collection<Entity> candidates = world.getNearbyEntities(
+                new Location(world, cx, cy, cz), rx, ry, rz);
+
         final boolean filterByType = !mobTypes.isEmpty();
-        Collection<ActiveMob> allActive = MythicBukkit.inst().getMobManager().getActiveMobs();
         int count = 0;
-        for (ActiveMob mob : allActive) {
+
+        for (Entity entity : candidates) {
+            // Precise region containment check (bounding-box is wider than the region).
+            Location loc = entity.getLocation();
+            if (!region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) {
+                continue;
+            }
+            // Check whether this Bukkit entity is a tracked MythicMobs mob.
+            Optional<ActiveMob> activeMob = MythicBukkit.inst().getMobManager()
+                    .getActiveMob(entity.getUniqueId());
+            if (activeMob.isEmpty()) continue;
+
+            ActiveMob mob = activeMob.get();
             if (mob.isDead()) continue;
-            // Cheap type filter before any location work (normalised comparison).
+
+            // Type filter using normalised name comparison.
             if (filterByType && !matchesAny(mob.getMobType(), mobTypes)) continue;
 
-            AbstractEntity abstractEntity = mob.getEntity();
-            if (abstractEntity == null || abstractEntity.isDead()) continue;
-
-            Location loc = abstractEntity.getBukkitEntity().getLocation();
-            // Filter by world reference before the bounding-box / contains() check.
-            if (!world.equals(loc.getWorld())) continue;
-
-            if (region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) {
-                count++;
-            }
+            count++;
         }
         return count;
     }
