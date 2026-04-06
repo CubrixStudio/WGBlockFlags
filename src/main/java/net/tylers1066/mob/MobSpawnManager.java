@@ -65,9 +65,11 @@ public class MobSpawnManager {
     // -------------------------------------------------------------------------
 
     public void start() {
+        // Force all autospawn zone chunks to stay loaded so that entities inside
+        // them are always tracked and countable, even with no nearby players.
+        addChunkTickets();
         // Use runTaskTimer (non-deprecated) instead of scheduleSyncRepeatingTask.
-        // delay=1 avoids firing during the same tick as start() — useful during
-        // server startup when WorldGuard regions may not yet be fully loaded.
+        // delay=1 avoids firing during the same tick as start().
         task = plugin.getServer().getScheduler()
                 .runTaskTimer(plugin, this::tick, 1L, TASK_PERIOD_TICKS);
         plugin.getLogger().info("[MobSpawn] Scheduler started (taskId=" + task.getTaskId() + ").");
@@ -78,8 +80,39 @@ public class MobSpawnManager {
             task.cancel();
             task = null;
         }
+        removeChunkTickets();
         countdown.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
+    }
+
+    /**
+     * Adds plugin chunk tickets for every chunk column overlapping an autospawn
+     * zone. Tickets prevent Paper from unloading those chunks, so that entities
+     * inside the zone are always live and visible to {@code getNearbyEntities()}.
+     */
+    private void addChunkTickets() {
+        for (World world : plugin.getServer().getWorlds()) {
+            for (RegionEntry entry : cache.getAutoSpawnEntries(world.getName())) {
+                BlockVector3 min = entry.region().getMinimumPoint();
+                BlockVector3 max = entry.region().getMaximumPoint();
+                int count = 0;
+                for (int cx = min.x() >> 4; cx <= max.x() >> 4; cx++) {
+                    for (int cz = min.z() >> 4; cz <= max.z() >> 4; cz++) {
+                        world.addPluginChunkTicket(cx, cz, plugin);
+                        count++;
+                    }
+                }
+                plugin.getLogger().info("[MobSpawn] Zone '" + entry.region().getId()
+                        + "': keeping " + count + " chunk(s) loaded.");
+            }
+        }
+    }
+
+    /** Releases all chunk tickets held by this plugin (called on stop/reload). */
+    private void removeChunkTickets() {
+        for (World world : plugin.getServer().getWorlds()) {
+            world.removePluginChunkTickets(plugin);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -194,14 +227,13 @@ public class MobSpawnManager {
 
     /**
      * Searches for a safe spawn location inside the region by trying random positions.
-     * Chunks are loaded synchronously on demand so that zones spawn even with no
-     * nearby players.
+     * All chunk columns are guaranteed loaded via plugin chunk tickets added in
+     * {@link #addChunkTickets()}, so no on-demand chunk loading is needed here.
      *
      * <p>Strategy:
      * <ol>
      *   <li>Enumerate all chunk columns overlapping the region bounding box.</li>
      *   <li>Pick a random column, then a random (x,z) clamped to the region bbox.</li>
-     *   <li>Load the chunk if not already loaded ({@code getChunkAt} is safe on the main thread).</li>
      *   <li>Scan downward for a solid ground block with two passable blocks
      *       above it, with the spawn point (y+1) inside the region.</li>
      * </ol>
@@ -229,12 +261,7 @@ public class MobSpawnManager {
             int[] col = chunks.get(rng.nextInt(chunks.size()));
             int x = Math.max(min.x(), Math.min(max.x(), col[0] * 16 + rng.nextInt(16)));
             int z = Math.max(min.z(), Math.min(max.z(), col[1] * 16 + rng.nextInt(16)));
-
-            // Ensure the chunk is loaded before accessing blocks.
-            // getChunkAt() loads it synchronously if needed (disk cache, ~1-5 ms).
-            if (!world.isChunkLoaded(col[0], col[1])) {
-                world.getChunkAt(col[0], col[1]);
-            }
+            // Chunks are guaranteed loaded via plugin chunk tickets (see addChunkTickets).
 
             // Scan downward for solid ground + two passable blocks above.
             // The spawn point (y+1, mob's feet) must be inside the region.
