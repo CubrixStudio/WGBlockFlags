@@ -23,6 +23,7 @@ public class MobModule {
     private boolean dropListenerRegistered = false;
     /** Guard against registering MobSpawnFilterListener more than once. */
     private boolean filterListenerRegistered = false;
+    private boolean deathListenerRegistered = false;
 
     public MobModule(WGBlockFlags plugin) {
         this.plugin = plugin;
@@ -62,6 +63,11 @@ public class MobModule {
         }
         manager = new MobSpawnManager(plugin, cache, adapter);
         manager.start();
+        if (!deathListenerRegistered) {
+            plugin.getServer().getPluginManager().registerEvents(
+                    new MobZoneDeathListener(this), plugin);
+            deathListenerRegistered = true;
+        }
         plugin.getLogger().info("[MobSpawn] Mob spawn module enabled.");
     }
 

@@ -20,36 +20,49 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Drives the automatic mob-spawn mechanic for WorldGuard farm regions.
  *
- * <p>A single BukkitScheduler task fires every 20 ticks (1 second). On each fire it
- * iterates all loaded worlds and all auto-spawn regions, checks per-region timers,
- * and spawns mobs when the interval has elapsed.
+ * <p>A single BukkitScheduler task fires every {@value #TASK_PERIOD_TICKS} ticks.
+ * On each fire it iterates all worlds and all autospawn regions, checks per-region
+ * countdown timers, and spawns mobs when the interval has elapsed.
  *
- * <p>Population is controlled by counting live MythicMobs entities inside the
- * region at spawn time — no UUID tracking needed, so mob deaths are handled
- * implicitly at the next cycle.
+ * <p>Population is tracked via UUID: each spawned mob is recorded in
+ * {@link #trackedMobs} and its zone counter is decremented when the mob dies
+ * (see {@link #recordDeath(UUID)}). No chunk tickets are held and no spatial
+ * entity queries are needed for the population cap.
  */
 public class MobSpawnManager {
 
-    /** Ticks between scheduler fires. Lower values waste CPU; 20 is fine for spawn intervals measured in hundreds of ticks. */
+    /** Ticks between scheduler fires (1 second). */
     private static final int TASK_PERIOD_TICKS = 20;
 
     private final WGBlockFlags plugin;
     private final MobRegionCache cache;
     private final MythicAdapter adapter;
-    // Use ThreadLocalRandom — no contention, no object allocation each use.
+
     private static ThreadLocalRandom rng() { return ThreadLocalRandom.current(); }
 
+    // ---- Per-zone countdown timer ----
     /**
-     * Remaining ticks before the next spawn cycle per region key ({@code "worldName:regionId"}).
-     * Decremented by {@link #TASK_PERIOD_TICKS} on every scheduler fire.
-     * When it reaches 0 (or below), a spawn cycle is attempted and the counter
-     * is reset to the region's configured spawn interval.
-     * Using a countdown avoids relying on {@code world.getFullTime()} which can
-     * behave unexpectedly during server startup or across world reloads.
+     * Remaining ticks before the next spawn cycle per region key
+     * ({@code "worldName:regionId"}). Decremented by {@link #TASK_PERIOD_TICKS}
+     * each scheduler fire; a value ≤ 0 means "ready to spawn".
      */
     private final Map<String, Integer> countdown = new HashMap<>();
 
-    /** Incremented on every scheduler fire — lets the heartbeat log confirm the task is alive. */
+    // ---- UUID-based population tracking ----
+    /**
+     * Maps each tracked mob UUID to its zone key.
+     * Used to decrement the correct zone counter on death.
+     */
+    private final Map<UUID, String> trackedMobs = new HashMap<>();
+
+    /**
+     * Live population count per zone key. Incremented on spawn, decremented on
+     * death. Never goes below zero. Accurate across chunk loads/unloads because
+     * it does not rely on entities being in loaded chunks.
+     */
+    private final Map<String, Integer> zoneCount = new HashMap<>();
+
+    /** Incremented on every scheduler fire for heartbeat logging. */
     private int tickCounter = 0;
 
     private BukkitTask task = null;
@@ -65,11 +78,6 @@ public class MobSpawnManager {
     // -------------------------------------------------------------------------
 
     public void start() {
-        // Force all autospawn zone chunks to stay loaded so that entities inside
-        // them are always tracked and countable, even with no nearby players.
-        addChunkTickets();
-        // Use runTaskTimer (non-deprecated) instead of scheduleSyncRepeatingTask.
-        // delay=1 avoids firing during the same tick as start().
         task = plugin.getServer().getScheduler()
                 .runTaskTimer(plugin, this::tick, 1L, TASK_PERIOD_TICKS);
         plugin.getLogger().info("[MobSpawn] Scheduler started (taskId=" + task.getTaskId() + ").");
@@ -80,38 +88,34 @@ public class MobSpawnManager {
             task.cancel();
             task = null;
         }
-        removeChunkTickets();
         countdown.clear();
+        trackedMobs.clear();
+        zoneCount.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
 
+    // -------------------------------------------------------------------------
+    // Population tracking (called by MobZoneDeathListener)
+    // -------------------------------------------------------------------------
+
     /**
-     * Adds plugin chunk tickets for every chunk column overlapping an autospawn
-     * zone. Tickets prevent Paper from unloading those chunks, so that entities
-     * inside the zone are always live and visible to {@code getNearbyEntities()}.
+     * Records that a mob was spawned in the given zone.
+     * Called from {@link #spawnBatch} after a successful MythicMobs spawn.
      */
-    private void addChunkTickets() {
-        for (World world : plugin.getServer().getWorlds()) {
-            for (RegionEntry entry : cache.getAutoSpawnEntries(world.getName())) {
-                BlockVector3 min = entry.region().getMinimumPoint();
-                BlockVector3 max = entry.region().getMaximumPoint();
-                int count = 0;
-                for (int cx = min.x() >> 4; cx <= max.x() >> 4; cx++) {
-                    for (int cz = min.z() >> 4; cz <= max.z() >> 4; cz++) {
-                        world.addPluginChunkTicket(cx, cz, plugin);
-                        count++;
-                    }
-                }
-                plugin.getLogger().info("[MobSpawn] Zone '" + entry.region().getId()
-                        + "': keeping " + count + " chunk(s) loaded.");
-            }
-        }
+    void recordSpawn(String zoneKey, UUID uuid) {
+        trackedMobs.put(uuid, zoneKey);
+        zoneCount.merge(zoneKey, 1, Integer::sum);
     }
 
-    /** Releases all chunk tickets held by this plugin (called on stop/reload). */
-    private void removeChunkTickets() {
-        for (World world : plugin.getServer().getWorlds()) {
-            world.removePluginChunkTickets(plugin);
+    /**
+     * Records that a tracked mob has been removed from the world (killed,
+     * despawned, removed by a plugin, etc.).
+     * Called from {@link MobZoneDeathListener} on {@code EntityDeathEvent}.
+     */
+    public void recordDeath(UUID uuid) {
+        String zoneKey = trackedMobs.remove(uuid);
+        if (zoneKey != null) {
+            zoneCount.merge(zoneKey, -1, (cur, d) -> Math.max(0, cur + d));
         }
     }
 
@@ -120,19 +124,13 @@ public class MobSpawnManager {
     // -------------------------------------------------------------------------
 
     private void tick() {
-        // Increment and heartbeat OUTSIDE try-catch so we always see it,
-        // even if tickInternal() is somehow aborting before its own logs.
         tickCounter++;
-        // Heartbeat every 20 fires (= 400 ticks = 20 s) when debug.mob is on.
         if (plugin.getPluginConfig().isDebugMob() && tickCounter % 20 == 0) {
             plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter);
         }
         try {
             tickInternal();
         } catch (Throwable e) {
-            // Catch Throwable (not just Exception) so that errors from third-party
-            // libraries (e.g. MythicMobs) don't silently kill the repeating task.
-            // Always print full stack trace — getMessage() returns null for NPE.
             plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
             e.printStackTrace();
         }
@@ -147,21 +145,14 @@ public class MobSpawnManager {
                 String regionId = entry.region().getId();
                 String key = world.getName() + ":" + regionId;
 
-                // Decrement the per-zone countdown by the scheduler period.
-                // A countdown of 0 (or absent) means "ready to spawn now".
                 int remaining = countdown.getOrDefault(key, 0) - TASK_PERIOD_TICKS;
-
                 if (remaining > 0) {
                     countdown.put(key, remaining);
-                    continue; // Not yet time — most common path, no logging.
+                    continue;
                 }
 
-                // Countdown reached 0 — evaluate this zone.
                 debug("[MobSpawn] Zone '" + regionId + "': ready to spawn, evaluating...");
 
-                // Check time-of-day and weather conditions BEFORE resetting the timer.
-                // If conditions are not met the countdown is left at 0 so the zone is
-                // re-checked on the very next scheduler fire.
                 if (!isValidTime(world, data.spawnTime())) {
                     debug("[MobSpawn] Zone '" + regionId + "': skipped — time restriction '"
                             + data.spawnTime() + "'.");
@@ -175,11 +166,10 @@ public class MobSpawnManager {
                     continue;
                 }
 
-                // Conditions met — reset the timer immediately to prevent rapid re-spawning.
                 countdown.put(key, data.spawnInterval());
 
-                // Population check
-                int current = adapter.countMobsInRegion(world, entry.region(), data.mobTypes());
+                // Population check using UUID-tracked count — no chunk loading needed.
+                int current = zoneCount.getOrDefault(key, 0);
                 int toSpawn = Math.min(data.spawnCount(), data.maxMobs() - current);
                 if (toSpawn <= 0) {
                     debug("[MobSpawn] Zone '" + regionId + "': at capacity ("
@@ -189,7 +179,7 @@ public class MobSpawnManager {
 
                 debug("[MobSpawn] Zone '" + regionId + "': spawning " + toSpawn
                         + " mob(s) (" + current + "/" + data.maxMobs() + " present).");
-                spawnBatch(world, entry.region(), data, toSpawn);
+                spawnBatch(world, entry.region(), data, toSpawn, key);
             }
         }
     }
@@ -198,56 +188,44 @@ public class MobSpawnManager {
     // Spawn helpers
     // -------------------------------------------------------------------------
 
-    private void spawnBatch(World world, ProtectedRegion region, MobSpawnData data, int count) {
+    private void spawnBatch(World world, ProtectedRegion region, MobSpawnData data,
+                            int count, String zoneKey) {
         int attempts = plugin.getPluginConfig().getMobSpawnAttempts();
         List<String> types = new ArrayList<>(data.mobTypes());
 
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
-            if (loc == null) {
-                // findSafeLocation already logged the specific reason (no chunks / no terrain).
-                break;
-            }
+            if (loc == null) break;
+
             String mobType = types.get(rng().nextInt(types.size()));
             double level = resolveLevel(data.levelMin(), data.levelMax());
-            boolean spawned = adapter.spawnMob(mobType, loc, level).isPresent();
-            if (plugin.getPluginConfig().isDebugMob()) {
-                if (spawned) {
-                    debug("[MobSpawn] Spawned '" + mobType + "' at "
-                            + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
-                            + " in region '" + region.getId() + "'.");
-                } else {
-                    plugin.getLogger().warning("[MobSpawn] FAILED to spawn '" + mobType
-                            + "' in region '" + region.getId() + "' — check that the mob name"
-                            + " matches exactly (case-sensitive) the MythicMobs mob internal name.");
-                }
+            Optional<UUID> spawned = adapter.spawnMob(mobType, loc, level);
+
+            if (spawned.isPresent()) {
+                recordSpawn(zoneKey, spawned.get());
+                debug("[MobSpawn] Spawned '" + mobType + "' at "
+                        + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
+                        + " in region '" + region.getId() + "'.");
+            } else if (plugin.getPluginConfig().isDebugMob()) {
+                plugin.getLogger().warning("[MobSpawn] FAILED to spawn '" + mobType
+                        + "' in region '" + region.getId() + "' — check that the mob name"
+                        + " matches exactly (case-sensitive) the MythicMobs mob internal name.");
             }
         }
     }
 
     /**
-     * Searches for a safe spawn location inside the region by trying random positions.
-     * All chunk columns are guaranteed loaded via plugin chunk tickets added in
-     * {@link #addChunkTickets()}, so no on-demand chunk loading is needed here.
-     *
-     * <p>Strategy:
-     * <ol>
-     *   <li>Enumerate all chunk columns overlapping the region bounding box.</li>
-     *   <li>Pick a random column, then a random (x,z) clamped to the region bbox.</li>
-     *   <li>Scan downward for a solid ground block with two passable blocks
-     *       above it, with the spawn point (y+1) inside the region.</li>
-     * </ol>
+     * Searches for a safe spawn location by trying random positions inside the
+     * region bounding box. Chunks are loaded on demand (synchronous, main thread)
+     * only when needed for block queries; they are released after this call.
      *
      * @param attempts number of random positions to try before giving up
-     * @return a safe {@link Location} inside the region, or {@code null} if none found
+     * @return a safe {@link Location} inside the region, or {@code null}
      */
     private @Nullable Location findSafeLocation(World world, ProtectedRegion region, int attempts) {
         BlockVector3 min = region.getMinimumPoint();
         BlockVector3 max = region.getMaximumPoint();
 
-        // Collect all chunk columns that overlap the region bounding box.
-        // Chunks are loaded on demand (synchronous on the main thread, safe) so that
-        // mob zones can spawn even when no player is nearby.
         List<int[]> chunks = new ArrayList<>();
         for (int cx = min.x() >> 4; cx <= max.x() >> 4; cx++) {
             for (int cz = min.z() >> 4; cz <= max.z() >> 4; cz++) {
@@ -257,28 +235,25 @@ public class MobSpawnManager {
 
         ThreadLocalRandom rng = rng();
         for (int attempt = 0; attempt < attempts; attempt++) {
-            // Pick a random chunk column, then a random position inside it, clamped to region bounds.
             int[] col = chunks.get(rng.nextInt(chunks.size()));
             int x = Math.max(min.x(), Math.min(max.x(), col[0] * 16 + rng.nextInt(16)));
             int z = Math.max(min.z(), Math.min(max.z(), col[1] * 16 + rng.nextInt(16)));
-            // Chunks are guaranteed loaded via plugin chunk tickets (see addChunkTickets).
 
-            // Scan downward for solid ground + two passable blocks above.
-            // The spawn point (y+1, mob's feet) must be inside the region.
+            // Load the chunk temporarily so block queries return real data.
+            if (!world.isChunkLoaded(col[0], col[1])) {
+                world.getChunkAt(col[0], col[1]);
+            }
+
             for (int y = max.y() - 1; y >= min.y(); y--) {
-                if (!region.contains(x, y + 1, z)) {
-                    continue;
-                }
+                if (!region.contains(x, y + 1, z)) continue;
                 Block ground = world.getBlockAt(x, y, z);
                 Block feet   = world.getBlockAt(x, y + 1, z);
                 Block head   = world.getBlockAt(x, y + 2, z);
-
                 if (isSolidGround(ground) && isPassable(feet) && isPassable(head)) {
                     return new Location(world, x + 0.5, y + 1, z + 0.5);
                 }
             }
         }
-        // All attempts exhausted — no valid ground found.
         plugin.getLogger().warning("[MobSpawn] No valid spawn position in region '"
                 + region.getId() + "' after " + attempts + " attempts. "
                 + "Check that the region has accessible solid ground.");
@@ -291,33 +266,28 @@ public class MobSpawnManager {
 
     private boolean isValidTime(World world, String spawnTime) {
         return switch (spawnTime) {
-            case "day" -> world.isDayTime();
+            case "day"   -> world.isDayTime();
             case "night" -> !world.isDayTime();
-            default -> true; // "any" or unrecognised value
+            default      -> true;
         };
     }
 
     private boolean isValidWeather(World world, String spawnWeather) {
         return switch (spawnWeather) {
             case "clear" -> !world.hasStorm() && !world.isThundering();
-            case "rain" -> world.hasStorm() || world.isThundering();
-            default -> true; // "any" or unrecognised value
+            case "rain"  -> world.hasStorm() || world.isThundering();
+            default      -> true;
         };
     }
 
     private double resolveLevel(int min, int max) {
-        if (min >= max) {
-            return min;
-        }
-        return min + rng().nextInt(max - min + 1);
+        return (min >= max) ? min : min + rng().nextInt(max - min + 1);
     }
 
     private boolean isSolidGround(Block block) {
         Material type = block.getType();
         if (!type.isSolid() || type.isAir()) return false;
         if (type == Material.WATER || type == Material.LAVA) return false;
-        // Exclude tree components — leaves and logs are technically "solid" in the
-        // Bukkit API but mobs should never spawn on top of them.
         if (Tag.LEAVES.isTagged(type)) return false;
         if (Tag.LOGS.isTagged(type)) return false;
         return true;
