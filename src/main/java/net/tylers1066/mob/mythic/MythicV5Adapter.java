@@ -121,6 +121,6 @@ public class MythicV5Adapter implements MythicAdapter {
      * {@code "Bear-Polar"} → {@code "bear_polar"}, {@code "bear_polar"} → {@code "bear_polar"}.
      */
     private static String normalize(String name) {
-        return name.toLowerCase(Locale.ROOT).replace('-', '_');
+        return name.strip().toLowerCase(Locale.ROOT).replace('-', '_');
     }
 }

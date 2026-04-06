@@ -41,6 +41,9 @@ public class MobSpawnManager {
     /** Last spawn tick per region key ({@code "worldName:regionId"}). Uses {@link World#getFullTime()}. */
     private final Map<String, Long> lastSpawnTick = new HashMap<>();
 
+    /** Incremented on every scheduler fire — lets the heartbeat log confirm the task is alive. */
+    private int tickCounter = 0;
+
     private int taskId = -1;
 
     public MobSpawnManager(WGBlockFlags plugin, MobRegionCache cache, MythicAdapter adapter) {
@@ -73,15 +76,21 @@ public class MobSpawnManager {
     private void tick() {
         try {
             tickInternal();
-        } catch (Exception e) {
-            // Always print full stack trace — a SEVERE error must be visible even
-            // without debug.mob, and getMessage() returns null for NPE/etc.
+        } catch (Throwable e) {
+            // Catch Throwable (not just Exception) so that errors from third-party
+            // libraries (e.g. MythicMobs) don't silently kill the repeating task.
+            // Always print full stack trace — getMessage() returns null for NPE.
             plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
             e.printStackTrace();
         }
     }
 
     private void tickInternal() {
+        tickCounter++;
+        // Heartbeat: one line every ~5 seconds so we can confirm the scheduler is alive.
+        if (plugin.getPluginConfig().isDebugMob() && tickCounter % 100 == 0) {
+            plugin.getLogger().info("[MobSpawn] Scheduler heartbeat tick #" + tickCounter);
+        }
         for (World world : plugin.getServer().getWorlds()) {
             long currentTick = world.getFullTime();
             List<RegionEntry> entries = cache.getAutoSpawnEntries(world.getName());
