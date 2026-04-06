@@ -65,6 +65,9 @@ public class MobSpawnManager {
     /** Incremented on every scheduler fire for heartbeat logging. */
     private int tickCounter = 0;
 
+    /** Zones that have already logged their "at capacity" message — avoids log spam. */
+    private final Set<String> atCapacityLogged = new HashSet<>();
+
     private BukkitTask task = null;
 
     public MobSpawnManager(WGBlockFlags plugin, MobRegionCache cache, MythicAdapter adapter) {
@@ -91,6 +94,7 @@ public class MobSpawnManager {
         countdown.clear();
         trackedMobs.clear();
         zoneCount.clear();
+        atCapacityLogged.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
 
@@ -172,15 +176,22 @@ public class MobSpawnManager {
                 int current = zoneCount.getOrDefault(key, 0);
                 int toSpawn = Math.min(data.spawnCount(), data.maxMobs() - current);
                 if (toSpawn <= 0) {
-                    debug("[MobSpawn] Zone '" + regionId + "': at capacity ("
-                            + current + "/" + data.maxMobs() + ") — skipping cycle.");
+                    // Log at-capacity once (when first hitting the cap), then only in debug.
+                    if (current == data.maxMobs() && !atCapacityLogged.contains(key)) {
+                        plugin.getLogger().info("[MobSpawn] " + regionId
+                                + ": at capacity (" + current + "/" + data.maxMobs() + ").");
+                        atCapacityLogged.add(key);
+                    } else {
+                        debug("[MobSpawn] Zone '" + regionId + "': at capacity ("
+                                + current + "/" + data.maxMobs() + ") — skipping cycle.");
+                    }
                     continue;
                 }
+                atCapacityLogged.remove(key); // below cap again after a death
 
                 debug("[MobSpawn] Zone '" + regionId + "': spawning " + toSpawn
                         + " mob(s) (" + current + "/" + data.maxMobs() + " present).");
-                spawnBatch(world, entry.region(), data, toSpawn, key);
-            }
+                spawnBatch(world, entry.region(), data, toSpawn, key);            }
         }
     }
 
@@ -192,6 +203,7 @@ public class MobSpawnManager {
                             int count, String zoneKey) {
         int attempts = plugin.getPluginConfig().getMobSpawnAttempts();
         List<String> types = new ArrayList<>(data.mobTypes());
+        int spawned = 0;
 
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
@@ -199,18 +211,25 @@ public class MobSpawnManager {
 
             String mobType = types.get(rng().nextInt(types.size()));
             double level = resolveLevel(data.levelMin(), data.levelMax());
-            Optional<UUID> spawned = adapter.spawnMob(mobType, loc, level);
+            Optional<UUID> result = adapter.spawnMob(mobType, loc, level);
 
-            if (spawned.isPresent()) {
-                recordSpawn(zoneKey, spawned.get());
+            if (result.isPresent()) {
+                recordSpawn(zoneKey, result.get());
+                spawned++;
                 debug("[MobSpawn] Spawned '" + mobType + "' at "
                         + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
                         + " in region '" + region.getId() + "'.");
-            } else if (plugin.getPluginConfig().isDebugMob()) {
+            } else {
                 plugin.getLogger().warning("[MobSpawn] FAILED to spawn '" + mobType
-                        + "' in region '" + region.getId() + "' — check that the mob name"
-                        + " matches exactly (case-sensitive) the MythicMobs mob internal name.");
+                        + "' in region '" + region.getId() + "' — mob name not found in MythicMobs.");
             }
+        }
+
+        // Always log a brief cycle summary so spawn activity is visible even without debug.mob.
+        if (spawned > 0) {
+            int newTotal = zoneCount.getOrDefault(zoneKey, 0);
+            plugin.getLogger().info("[MobSpawn] " + region.getId()
+                    + ": +" + spawned + " mob(s) → " + newTotal + "/" + data.maxMobs() + ".");
         }
     }
 
