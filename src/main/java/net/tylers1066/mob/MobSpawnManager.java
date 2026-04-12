@@ -49,26 +49,11 @@ public class MobSpawnManager {
     private final Map<String, Integer> countdown = new HashMap<>();
 
     // ---- UUID-based population tracking ----
-    /**
-     * Maps each tracked mob UUID to its zone key.
-     * Used to decrement the correct zone counter on death.
-     */
     private final Map<UUID, String> trackedMobs = new HashMap<>();
-
-    /**
-     * Live population count per zone key. Incremented on spawn, decremented on
-     * death. Never goes below zero. Accurate across chunk loads/unloads because
-     * it does not rely on entities being in loaded chunks.
-     */
     private final Map<String, Integer> zoneCount = new HashMap<>();
 
     /** Incremented on every scheduler fire for heartbeat logging. */
-    private int tickCounter = 0;
-
-    /** Zones that have already logged their "at capacity" message — avoids log spam. */
-    private final Set<String> atCapacityLogged = new HashSet<>();
-
-    private BukkitTask task = null;
+    private int tickCounter = 0;    private BukkitTask task = null;
 
     public MobSpawnManager(WGBlockFlags plugin, MobRegionCache cache, MythicAdapter adapter) {
         this.plugin = plugin;
@@ -94,9 +79,43 @@ public class MobSpawnManager {
         countdown.clear();
         trackedMobs.clear();
         zoneCount.clear();
-        atCapacityLogged.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
+
+    // -------------------------------------------------------------------------
+    // Public query API
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns a snapshot of all active autospawn zones with their current
+     * population and configuration. Used by {@code /wgbf mobs}.
+     */
+    public List<ZoneSummary> getZoneSummaries() {
+        List<ZoneSummary> list = new ArrayList<>();
+        for (org.bukkit.World world : plugin.getServer().getWorlds()) {
+            for (RegionEntry entry : cache.getAutoSpawnEntries(world.getName())) {
+                String key = world.getName() + ":" + entry.region().getId();
+                int current = zoneCount.getOrDefault(key, 0);
+                list.add(new ZoneSummary(
+                        entry.region().getId(),
+                        world.getName(),
+                        new ArrayList<>(entry.spawnData().mobTypes()),
+                        current,
+                        entry.spawnData().maxMobs()
+                ));
+            }
+        }
+        return list;
+    }
+
+    /** Immutable snapshot of a zone's current population state. */
+    public record ZoneSummary(
+            String regionId,
+            String worldName,
+            List<String> mobTypes,
+            int current,
+            int maxMobs
+    ) {}
 
     // -------------------------------------------------------------------------
     // Population tracking (called by MobZoneDeathListener)
@@ -176,18 +195,10 @@ public class MobSpawnManager {
                 int current = zoneCount.getOrDefault(key, 0);
                 int toSpawn = Math.min(data.spawnCount(), data.maxMobs() - current);
                 if (toSpawn <= 0) {
-                    // Log at-capacity once (when first hitting the cap), then only in debug.
-                    if (current == data.maxMobs() && !atCapacityLogged.contains(key)) {
-                        plugin.getLogger().info("[MobSpawn] " + regionId
-                                + ": at capacity (" + current + "/" + data.maxMobs() + ").");
-                        atCapacityLogged.add(key);
-                    } else {
-                        debug("[MobSpawn] Zone '" + regionId + "': at capacity ("
-                                + current + "/" + data.maxMobs() + ") — skipping cycle.");
-                    }
+                    debug("[MobSpawn] Zone '" + regionId + "': at capacity ("
+                            + current + "/" + data.maxMobs() + ") — skipping cycle.");
                     continue;
                 }
-                atCapacityLogged.remove(key); // below cap again after a death
 
                 debug("[MobSpawn] Zone '" + regionId + "': spawning " + toSpawn
                         + " mob(s) (" + current + "/" + data.maxMobs() + " present).");
@@ -220,16 +231,9 @@ public class MobSpawnManager {
                         + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
                         + " in region '" + region.getId() + "'.");
             } else {
-                plugin.getLogger().warning("[MobSpawn] FAILED to spawn '" + mobType
+                debug("[MobSpawn] FAILED to spawn '" + mobType
                         + "' in region '" + region.getId() + "' — mob name not found in MythicMobs.");
             }
-        }
-
-        // Always log a brief cycle summary so spawn activity is visible even without debug.mob.
-        if (spawned > 0) {
-            int newTotal = zoneCount.getOrDefault(zoneKey, 0);
-            plugin.getLogger().info("[MobSpawn] " + region.getId()
-                    + ": +" + spawned + " mob(s) → " + newTotal + "/" + data.maxMobs() + ".");
         }
     }
 

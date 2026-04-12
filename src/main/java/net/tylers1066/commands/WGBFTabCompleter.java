@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 public class WGBFTabCompleter implements TabCompleter {
-    private static final List<String> SUBCOMMANDS = List.of("reload", "info", "help");
+    private static final List<String> SUBCOMMANDS = List.of("reload", "info", "mobs", "help");
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
