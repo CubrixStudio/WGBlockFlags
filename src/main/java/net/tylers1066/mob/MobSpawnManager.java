@@ -317,7 +317,13 @@ public class MobSpawnManager {
     }
 
     private boolean isPassable(Block block) {
-        return block.isPassable();
+        if (!block.isPassable()) return false;
+        Material type = block.getType();
+        // Leaves and cobwebs have no collision box so isPassable() returns true,
+        // but they are visually opaque — a mob spawned inside them looks glitched.
+        if (Tag.LEAVES.isTagged(type)) return false;
+        if (type == Material.COBWEB) return false;
+        return true;
     }
 
     private void debug(String msg) {
