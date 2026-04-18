@@ -11,6 +11,7 @@ import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Entity;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,6 +29,11 @@ import java.util.concurrent.ThreadLocalRandom;
  * {@link #trackedMobs} and its zone counter is decremented when the mob dies
  * (see {@link #recordDeath(UUID)}). No chunk tickets are held and no spatial
  * entity queries are needed for the population cap.
+ *
+ * <p>Spawned mobs are marked {@code persistent} so Minecraft never despawns them
+ * regardless of player distance or chunk load state. A per-tick containment check
+ * teleports any loaded mob that has wandered outside its region back to a safe
+ * position inside it.
  */
 public class MobSpawnManager {
 
@@ -52,8 +58,12 @@ public class MobSpawnManager {
     private final Map<UUID, String> trackedMobs = new HashMap<>();
     private final Map<String, Integer> zoneCount = new HashMap<>();
 
+    /** Maps zone key → ProtectedRegion for fast containment lookups. Updated each tick. */
+    private final Map<String, ProtectedRegion> zoneRegions = new HashMap<>();
+
     /** Incremented on every scheduler fire for heartbeat logging. */
-    private int tickCounter = 0;    private BukkitTask task = null;
+    private int tickCounter = 0;
+    private BukkitTask task = null;
 
     public MobSpawnManager(WGBlockFlags plugin, MobRegionCache cache, MythicAdapter adapter) {
         this.plugin = plugin;
@@ -79,6 +89,7 @@ public class MobSpawnManager {
         countdown.clear();
         trackedMobs.clear();
         zoneCount.clear();
+        zoneRegions.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
 
@@ -133,7 +144,7 @@ public class MobSpawnManager {
     /**
      * Records that a tracked mob has been removed from the world (killed,
      * despawned, removed by a plugin, etc.).
-     * Called from {@link MobZoneDeathListener} on {@code EntityDeathEvent}.
+     * Called from {@link MobZoneDeathListener} on {@code EntityRemoveEvent}.
      */
     public void recordDeath(UUID uuid) {
         String zoneKey = trackedMobs.remove(uuid);
@@ -153,6 +164,7 @@ public class MobSpawnManager {
         }
         try {
             tickInternal();
+            checkContainment();
         } catch (Throwable e) {
             plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
             e.printStackTrace();
@@ -167,6 +179,9 @@ public class MobSpawnManager {
                 MobSpawnData data = entry.spawnData();
                 String regionId = entry.region().getId();
                 String key = world.getName() + ":" + regionId;
+
+                // Keep zoneRegions up to date so checkContainment() can use it.
+                zoneRegions.put(key, entry.region());
 
                 int remaining = countdown.getOrDefault(key, 0) - TASK_PERIOD_TICKS;
                 if (remaining > 0) {
@@ -202,7 +217,43 @@ public class MobSpawnManager {
 
                 debug("[MobSpawn] Zone '" + regionId + "': spawning " + toSpawn
                         + " mob(s) (" + current + "/" + data.maxMobs() + " present).");
-                spawnBatch(world, entry.region(), data, toSpawn, key);            }
+                spawnBatch(world, entry.region(), data, toSpawn, key);
+            }
+        }
+    }
+
+    /**
+     * Checks every currently loaded tracked mob and teleports it back inside its
+     * region if it has wandered outside. Only loaded entities are inspected —
+     * mobs in unloaded chunks cannot have moved and will be checked when their
+     * chunk loads again.
+     */
+    private void checkContainment() {
+        for (Map.Entry<UUID, String> mobEntry : new ArrayList<>(trackedMobs.entrySet())) {
+            UUID uuid = mobEntry.getKey();
+            String zoneKey = mobEntry.getValue();
+
+            Entity entity = plugin.getServer().getEntity(uuid);
+            if (entity == null || !entity.isValid()) continue; // unloaded or already removed
+
+            ProtectedRegion region = zoneRegions.get(zoneKey);
+            if (region == null) continue;
+
+            Location loc = entity.getLocation();
+            if (region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) continue;
+
+            // Mob has left the region — teleport back to a safe spot inside it.
+            int sep = zoneKey.indexOf(':');
+            World world = plugin.getServer().getWorld(zoneKey.substring(0, sep));
+            if (world == null) continue;
+
+            int attempts = plugin.getPluginConfig().getMobSpawnAttempts();
+            Location safe = findSafeLocation(world, region, attempts);
+            if (safe != null) {
+                entity.teleport(safe);
+                debug("[MobSpawn] Mob " + uuid + " left region '" + region.getId()
+                        + "' — teleported back.");
+            }
         }
     }
 
@@ -214,7 +265,6 @@ public class MobSpawnManager {
                             int count, String zoneKey) {
         int attempts = plugin.getPluginConfig().getMobSpawnAttempts();
         List<String> types = new ArrayList<>(data.mobTypes());
-        int spawned = 0;
 
         for (int i = 0; i < count; i++) {
             Location loc = findSafeLocation(world, region, attempts);
@@ -225,8 +275,12 @@ public class MobSpawnManager {
             Optional<UUID> result = adapter.spawnMob(mobType, loc, level);
 
             if (result.isPresent()) {
-                recordSpawn(zoneKey, result.get());
-                spawned++;
+                UUID uuid = result.get();
+                recordSpawn(zoneKey, uuid);
+                // Mark persistent so Minecraft never auto-despawns the mob,
+                // even when no player is nearby or the chunk is unloaded.
+                Entity entity = plugin.getServer().getEntity(uuid);
+                if (entity != null) entity.setPersistent(true);
                 debug("[MobSpawn] Spawned '" + mobType + "' at "
                         + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
                         + " in region '" + region.getId() + "'.");
