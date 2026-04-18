@@ -1,12 +1,9 @@
 package net.tylers1066.mob.mythic;
 
-import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import org.bukkit.Location;
-import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -32,17 +29,4 @@ public interface MythicAdapter {
      * @return the UUID of the spawned entity, or empty if the spawn failed
      */
     Optional<UUID> spawnMob(@NotNull String mobName, @NotNull Location location, double level);
-
-    /**
-     * Counts how many MythicMobs entities of the given types are currently alive
-     * inside the region.
-     *
-     * @param world     the world to search in
-     * @param region    the WorldGuard region
-     * @param mobTypes  mob type names to count; empty set counts all MythicMobs in the region
-     * @return the number of matching active mobs inside the region
-     */
-    int countMobsInRegion(@NotNull World world,
-                          @NotNull ProtectedRegion region,
-                          @NotNull Set<String> mobTypes);
 }
