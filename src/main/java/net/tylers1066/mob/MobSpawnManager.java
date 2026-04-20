@@ -282,10 +282,7 @@ public class MobSpawnManager {
             Optional<UUID> result = adapter.spawnMob(mobType, loc, level);
 
             if (result.isPresent()) {
-                UUID uuid = result.get();
-                recordSpawn(zoneKey, uuid);
-                Entity entity = plugin.getServer().getEntity(uuid);
-                if (entity != null) entity.setPersistent(true);
+                recordSpawn(zoneKey, result.get());
                 debug("[MobSpawn] Spawned '" + mobType + "' at "
                         + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
                         + " in region '" + region.getId() + "'.");

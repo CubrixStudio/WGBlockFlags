@@ -36,7 +36,11 @@ public class MythicV5Adapter implements MythicAdapter {
         }
         try {
             ActiveMob active = mythicMob.get().spawn(BukkitAdapter.adapt(location), level);
-            return Optional.of(active.getEntity().getUniqueId());
+            org.bukkit.entity.Entity entity = BukkitAdapter.adapt(active.getEntity());
+            // Mark persistent immediately — getServer().getEntity(uuid) in the caller
+            // may return null if the entity is not yet registered in Bukkit's registry.
+            entity.setPersistent(true);
+            return Optional.of(entity.getUniqueId());
         } catch (Exception e) {
             return Optional.empty();
         }
