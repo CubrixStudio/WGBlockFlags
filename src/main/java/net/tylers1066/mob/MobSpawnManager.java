@@ -258,10 +258,14 @@ public class MobSpawnManager {
             if (region == null) continue;
 
             Location loc = entity.getLocation();
-            if (region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) continue;
+            boolean outsideRegion = !region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+            boolean inWater = entity.isInWater()
+                    || loc.getBlock().getType() == Material.WATER
+                    || loc.getBlock().getType() == Material.BUBBLE_COLUMN;
 
-            // Mob has left the region — use cached safe location to avoid a full
-            // re-scan for every escaping mob in the same cycle.
+            if (!outsideRegion && !inWater) continue;
+
+            // Mob has left the region or entered water — teleport to cached safe location.
             Location safe = zoneLastSafeLocation.get(zoneKey);
             if (safe == null) {
                 int sep = zoneKey.indexOf(':');
@@ -273,8 +277,11 @@ public class MobSpawnManager {
             }
 
             entity.teleport(safe);
-            debug("[MobSpawn] Mob " + uuid + " left region '" + region.getId()
-                    + "' — teleported back.");
+            if (outsideRegion) {
+                debug("[MobSpawn] Mob " + uuid + " left region '" + region.getId() + "' — teleported back.");
+            } else {
+                debug("[MobSpawn] Mob " + uuid + " entered water in region '" + region.getId() + "' — teleported back.");
+            }
         }
     }
 
