@@ -6,6 +6,7 @@ import net.tylers1066.WGBlockFlags;
 import net.tylers1066.mob.MobRegionCache.MobSpawnData;
 import net.tylers1066.mob.MobRegionCache.RegionEntry;
 import net.tylers1066.mob.mythic.MythicAdapter;
+import org.bukkit.Chunk;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -32,9 +33,11 @@ import java.util.concurrent.ThreadLocalRandom;
  * spatial entity queries are needed for the population cap.
  *
  * <p>Spawned mobs are marked {@code persistent} so Minecraft never despawns them
- * regardless of player distance or chunk load state. A periodic containment check
- * teleports any loaded mob that has wandered outside its region back to a safe
- * position inside it.
+ * regardless of player distance. Region chunks are forceloaded to ensure mobs
+ * remain active and AI-enabled even when no players are nearby.
+ *
+ * <p>A periodic containment check teleports any loaded mob that has wandered
+ * outside its region back to a safe position inside it.
  */
 public class MobSpawnManager {
 
@@ -62,6 +65,8 @@ public class MobSpawnManager {
     private final Map<String, ProtectedRegion> zoneRegions          = new HashMap<>();
     /** Last valid spawn location per zone; reused for containment teleports. */
     private final Map<String, Location>        zoneLastSafeLocation = new HashMap<>();
+    /** Forceloaded chunks per zone; ensures mobs remain active even without players. */
+    private final Map<String, Set<Chunk>>      forceloadedChunks    = new HashMap<>();
 
     /** Incremented on every scheduler fire for heartbeat logging. */
     private int tickCounter      = 0;
@@ -91,11 +96,18 @@ public class MobSpawnManager {
             task.cancel();
             task = null;
         }
+        // Unforceload all region chunks to free server resources
+        for (Set<Chunk> chunks : forceloadedChunks.values()) {
+            for (Chunk chunk : chunks) {
+                chunk.setForceLoaded(false);
+            }
+        }
         countdown.clear();
         trackedMobs.clear();
         zoneCount.clear();
         zoneRegions.clear();
         zoneLastSafeLocation.clear();
+        forceloadedChunks.clear();
         plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
     }
 
@@ -216,6 +228,8 @@ public class MobSpawnManager {
 
                 debug("[MobSpawn] Zone '" + regionId + "': spawning " + toSpawn
                         + " mob(s) (" + current + "/" + data.maxMobs() + " present).");
+                // Ensure region chunks stay forceloaded so mobs remain active without players.
+                ensureChunksForceloaded(world, entry.region(), key);
                 spawnBatch(world, entry.region(), data, toSpawn, key);
             }
         }
@@ -291,6 +305,32 @@ public class MobSpawnManager {
                         + "' in region '" + region.getId() + "' — mob name not found in MythicMobs.");
             }
         }
+    }
+
+    /**
+     * Ensures all chunks within the region are forceloaded so mobs stay active
+     * even when no players are nearby. Called before spawning to guarantee chunks
+     * remain loaded for AI processing.
+     */
+    private void ensureChunksForceloaded(World world, ProtectedRegion region, String zoneKey) {
+        if (forceloadedChunks.containsKey(zoneKey)) {
+            return; // Already forceloaded
+        }
+
+        Set<Chunk> chunks = new HashSet<>();
+        BlockVector3 min = region.getMinimumPoint();
+        BlockVector3 max = region.getMaximumPoint();
+
+        for (int cx = min.x() >> 4; cx <= max.x() >> 4; cx++) {
+            for (int cz = min.z() >> 4; cz <= max.z() >> 4; cz++) {
+                Chunk chunk = world.getChunkAt(cx, cz);
+                chunk.setForceLoaded(true);
+                chunks.add(chunk);
+            }
+        }
+
+        forceloadedChunks.put(zoneKey, chunks);
+        debug("[MobSpawn] Forceloaded " + chunks.size() + " chunks in region '" + region.getId() + "'.");
     }
 
     /**
