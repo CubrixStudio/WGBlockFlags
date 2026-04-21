@@ -178,6 +178,7 @@ public class MobSpawnManager {
             if (++containmentTick >= CONTAINMENT_PERIOD) {
                 containmentTick = 0;
                 checkContainment();
+                enforcePersistence();  // Also ensure mobs haven't lost persistent flag
             }
         } catch (Throwable e) {
             plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
@@ -272,6 +273,30 @@ public class MobSpawnManager {
             entity.teleport(safe);
             debug("[MobSpawn] Mob " + uuid + " left region '" + region.getId()
                     + "' — teleported back.");
+        }
+    }
+
+    /**
+     * Periodically ensures that all tracked mobs have the persistent flag set.
+     * Some Minecraft mechanics or plugins may unset this flag; resetting it here
+     * prevents despawning. Also disables removal-when-far-away for LivingEntities.
+     */
+    private void enforcePersistence() {
+        for (UUID uuid : new ArrayList<>(trackedMobs.keySet())) {
+            Entity entity = plugin.getServer().getEntity(uuid);
+            if (entity == null || !entity.isValid()) continue;
+
+            // Ensure persistent flag is still set
+            if (!entity.isPersistent()) {
+                entity.setPersistent(true);
+                debug("[MobSpawn] Mob " + uuid + " lost persistent flag — reapplied.");
+            }
+
+            // For LivingEntity, also disable removal when far from players
+            if (entity instanceof org.bukkit.entity.LivingEntity living) {
+                // This prevents removal mechanics that operate independently of persistent flag
+                living.setRemoveWhenFarAway(false);
+            }
         }
     }
 
