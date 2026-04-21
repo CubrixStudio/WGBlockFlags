@@ -169,7 +169,9 @@ public class MobSpawnManager {
     private void tick() {
         tickCounter++;
         if (plugin.getPluginConfig().isDebugMob() && tickCounter % 20 == 0) {
-            plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter);
+            int playerCount = plugin.getServer().getOnlinePlayers().size();
+            plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter
+                    + " (players: " + playerCount + ")");
         }
         try {
             tickInternal();
