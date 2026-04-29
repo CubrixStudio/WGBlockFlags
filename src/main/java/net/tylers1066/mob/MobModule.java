@@ -106,6 +106,8 @@ public class MobModule {
         manager.start();
     }
 
+    public WGBlockFlags getPlugin() { return plugin; }
+
     public MobRegionCache getCache() {
         return cache;
     }
