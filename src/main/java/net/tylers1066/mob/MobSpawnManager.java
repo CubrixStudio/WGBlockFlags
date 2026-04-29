@@ -150,6 +150,11 @@ public class MobSpawnManager {
     // Population tracking (called by MobZoneDeathListener)
     // -------------------------------------------------------------------------
 
+    /** Returns true if the given UUID belongs to a mob tracked by this manager. */
+    public boolean isTracked(java.util.UUID uuid) {
+        return trackedMobs.containsKey(uuid);
+    }
+
     void recordSpawn(String zoneKey, UUID uuid) {
         trackedMobs.put(uuid, zoneKey);
         zoneCount.merge(zoneKey, 1, Integer::sum);
