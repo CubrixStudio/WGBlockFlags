@@ -150,6 +150,11 @@ public class MobSpawnManager {
     // Population tracking (called by MobZoneDeathListener)
     // -------------------------------------------------------------------------
 
+    /** Returns true if the given UUID belongs to a mob tracked by this manager. */
+    public boolean isTracked(java.util.UUID uuid) {
+        return trackedMobs.containsKey(uuid);
+    }
+
     void recordSpawn(String zoneKey, UUID uuid) {
         trackedMobs.put(uuid, zoneKey);
         zoneCount.merge(zoneKey, 1, Integer::sum);
@@ -169,7 +174,9 @@ public class MobSpawnManager {
     private void tick() {
         tickCounter++;
         if (plugin.getPluginConfig().isDebugMob() && tickCounter % 20 == 0) {
-            plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter);
+            int playerCount = plugin.getServer().getOnlinePlayers().size();
+            plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter
+                    + " (players: " + playerCount + ")");
         }
         try {
             tickInternal();
@@ -178,6 +185,7 @@ public class MobSpawnManager {
             if (++containmentTick >= CONTAINMENT_PERIOD) {
                 containmentTick = 0;
                 checkContainment();
+                enforcePersistence();  // Also ensure mobs haven't lost persistent flag
             }
         } catch (Throwable e) {
             plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
@@ -255,10 +263,14 @@ public class MobSpawnManager {
             if (region == null) continue;
 
             Location loc = entity.getLocation();
-            if (region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())) continue;
+            boolean outsideRegion = !region.contains(loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
+            boolean inWater = entity.isInWater()
+                    || loc.getBlock().getType() == Material.WATER
+                    || loc.getBlock().getType() == Material.BUBBLE_COLUMN;
 
-            // Mob has left the region — use cached safe location to avoid a full
-            // re-scan for every escaping mob in the same cycle.
+            if (!outsideRegion && !inWater) continue;
+
+            // Mob has left the region or entered water — teleport to cached safe location.
             Location safe = zoneLastSafeLocation.get(zoneKey);
             if (safe == null) {
                 int sep = zoneKey.indexOf(':');
@@ -270,8 +282,35 @@ public class MobSpawnManager {
             }
 
             entity.teleport(safe);
-            debug("[MobSpawn] Mob " + uuid + " left region '" + region.getId()
-                    + "' — teleported back.");
+            if (outsideRegion) {
+                debug("[MobSpawn] Mob " + uuid + " left region '" + region.getId() + "' — teleported back.");
+            } else {
+                debug("[MobSpawn] Mob " + uuid + " entered water in region '" + region.getId() + "' — teleported back.");
+            }
+        }
+    }
+
+    /**
+     * Periodically ensures that all tracked mobs have the persistent flag set.
+     * Some Minecraft mechanics or plugins may unset this flag; resetting it here
+     * prevents despawning. Also disables removal-when-far-away for LivingEntities.
+     */
+    private void enforcePersistence() {
+        for (UUID uuid : new ArrayList<>(trackedMobs.keySet())) {
+            Entity entity = plugin.getServer().getEntity(uuid);
+            if (entity == null || !entity.isValid()) continue;
+
+            // Ensure persistent flag is still set
+            if (!entity.isPersistent()) {
+                entity.setPersistent(true);
+                debug("[MobSpawn] Mob " + uuid + " lost persistent flag — reapplied.");
+            }
+
+            // For LivingEntity, also disable removal when far from players
+            if (entity instanceof org.bukkit.entity.LivingEntity living) {
+                // This prevents removal mechanics that operate independently of persistent flag
+                living.setRemoveWhenFarAway(false);
+            }
         }
     }
 

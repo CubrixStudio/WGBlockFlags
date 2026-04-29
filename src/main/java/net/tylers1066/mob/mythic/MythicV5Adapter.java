@@ -5,6 +5,7 @@ import io.lumine.mythic.bukkit.BukkitAdapter;
 import io.lumine.mythic.bukkit.MythicBukkit;
 import io.lumine.mythic.core.mobs.ActiveMob;
 import org.bukkit.Location;
+import org.bukkit.entity.Raider;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Locale;
@@ -40,6 +41,12 @@ public class MythicV5Adapter implements MythicAdapter {
             // Mark persistent immediately — getServer().getEntity(uuid) in the caller
             // may return null if the entity is not yet registered in Bukkit's registry.
             entity.setPersistent(true);
+            // Ravagers and other Raiders are linked to Minecraft's raid mechanic:
+            // without a nearby player the raid "fails" and the mob gets despawned
+            // despite being persistent. Detach from raid logic so it stays alive.
+            if (entity instanceof Raider raider) {
+                raider.setCanJoinRaid(false);
+            }
             return Optional.of(entity.getUniqueId());
         } catch (Exception e) {
             return Optional.empty();
