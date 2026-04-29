@@ -10,9 +10,9 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
  * Allows players to damage mobs that are tracked by the farm-zone spawn system,
  * regardless of WorldGuard region protection.
  *
- * <p>WorldGuard cancels entity-damage events for non-members at NORMAL priority.
- * By running at HIGH with ignoreCancelled=false we re-allow damage specifically
- * for zone mobs so players can farm them without needing region membership.
+ * <p>WorldGuard cancels entity-damage events at NORMAL priority. Running at
+ * HIGHEST with ignoreCancelled=false ensures we always execute last and can
+ * definitively re-allow damage on zone mobs for any player.
  */
 public class MobDamageListener implements Listener {
 
@@ -22,7 +22,7 @@ public class MobDamageListener implements Listener {
         this.module = module;
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player)) return;
 
