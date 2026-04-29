@@ -22,6 +22,7 @@ import net.tylers1066.mob.MobModule;
 import net.tylers1066.mob.MobSpawnFlags;
 import net.tylers1066.regen.BlockRegenFlags;
 import net.tylers1066.regen.BlockRegenModule;
+import net.tylers1066.util.LogUtil;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -101,6 +102,7 @@ public final class WGBlockFlags extends JavaPlugin {
         saveDefaultConfig();
         pluginConfig = new PluginConfig(this);
         languageConfig = new LanguageConfig(this);
+        new LogUtil(this);
 
         getServer().getPluginManager().registerEvents(new PlaceListener(this), this);
         getServer().getPluginManager().registerEvents(new BreakListener(this), this);
@@ -127,7 +129,7 @@ public final class WGBlockFlags extends JavaPlugin {
 
         int totalFlags = Flags.count() + FarmFlags.count() + MobSpawnFlags.count()
                 + ItemFlags.count() + BlockRegenFlags.count() + RegionEventsFlags.count();
-        getLogger().info("WGBlockFlags v" + getDescription().getVersion() + " enabled - "
+        LogUtil.moduleLifecycle("WGBlockFlags v" + getDescription().getVersion() + " enabled - "
                 + totalFlags + " flags registered");
     }
 
@@ -145,7 +147,7 @@ public final class WGBlockFlags extends JavaPlugin {
         if (regionEventsModule != null) {
             regionEventsModule.disable();
         }
-        getLogger().info("WGBlockFlags disabled");
+        LogUtil.moduleLifecycle("WGBlockFlags disabled");
     }
 
     public static WGBlockFlags getInstance() {

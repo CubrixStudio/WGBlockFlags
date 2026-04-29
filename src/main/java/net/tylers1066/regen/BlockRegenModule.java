@@ -1,6 +1,7 @@
 package net.tylers1066.regen;
 
 import net.tylers1066.WGBlockFlags;
+import net.tylers1066.util.LogUtil;
 import org.bukkit.plugin.PluginManager;
 
 /**
@@ -25,7 +26,7 @@ public class BlockRegenModule {
         listener = new BlockRegenListener(plugin, cache);
         PluginManager pm = plugin.getServer().getPluginManager();
         pm.registerEvents(listener, plugin);
-        plugin.getLogger().info("[BlockRegen] Block regen module enabled.");
+        LogUtil.moduleLifecycle("[BlockRegen] Block regen module enabled.");
     }
 
     public void disable() {
@@ -41,7 +42,7 @@ public class BlockRegenModule {
             return;
         }
         cache.rebuild(plugin.getPluginConfig());
-        plugin.getLogger().info("[BlockRegen] Block regen module reloaded.");
+        LogUtil.moduleLifecycle("[BlockRegen] Block regen module reloaded.");
     }
 
     public BlockRegenCache getCache() {

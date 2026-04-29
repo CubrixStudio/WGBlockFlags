@@ -10,6 +10,11 @@ public class PluginConfig {
     private final boolean debugBlocks;
     private final long messageCooldownMs;
 
+    // Logging settings
+    private final boolean logModuleLifecycle;
+    private final boolean logSchedulerEvents;
+    private final boolean logSpawnWarnings;
+
     // Farm settings
     private final int globalGrowInterval;
     private final int minGrowInterval;
@@ -33,6 +38,10 @@ public class PluginConfig {
         this.debugMob    = config.getBoolean("debug.mob",    false);
         this.debugBlocks = config.getBoolean("debug.blocks", false);
         this.messageCooldownMs = config.getLong("message-cooldown", 2) * 1000L;
+
+        this.logModuleLifecycle = config.getBoolean("logging.module-lifecycle", false);
+        this.logSchedulerEvents = config.getBoolean("logging.scheduler-events", false);
+        this.logSpawnWarnings = config.getBoolean("logging.spawn-warnings", false);
 
         this.blockRegenDefaultDelay = config.getInt("block-regen.default-delay", 1200);
 
@@ -115,6 +124,18 @@ public class PluginConfig {
 
     public int getMobSpawnAttempts() {
         return mobSpawnAttempts;
+    }
+
+    public boolean isLogModuleLifecycle() {
+        return logModuleLifecycle;
+    }
+
+    public boolean isLogSchedulerEvents() {
+        return logSchedulerEvents;
+    }
+
+    public boolean isLogSpawnWarnings() {
+        return logSpawnWarnings;
     }
 
     public static String formatMaterialName(Material material) {

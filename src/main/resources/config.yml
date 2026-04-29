@@ -2,6 +2,21 @@
 # Plugin version: 2.2.0
 # All player-facing messages are in language.yml
 
+# ============================================================
+# Logging Configuration
+# ============================================================
+logging:
+  # Console logs for plugin enable/disable and module lifecycle
+  # (module-enabled, module-disabled, module-reloaded messages)
+  module-lifecycle: false
+
+  # Console logs for scheduler/task events
+  # (scheduler-started, scheduler-stopped messages)
+  scheduler-events: false
+
+  # Console logs for spawn failures and warnings
+  spawn-warnings: false
+
 # Debug logging — enable per category to avoid log flooding.
 # Each category is independent; you can mix and match.
 debug:

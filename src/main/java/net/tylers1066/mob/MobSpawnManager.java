@@ -6,6 +6,7 @@ import net.tylers1066.WGBlockFlags;
 import net.tylers1066.mob.MobRegionCache.MobSpawnData;
 import net.tylers1066.mob.MobRegionCache.RegionEntry;
 import net.tylers1066.mob.mythic.MythicAdapter;
+import net.tylers1066.util.LogUtil;
 import org.bukkit.Chunk;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
@@ -88,7 +89,7 @@ public class MobSpawnManager {
     public void start() {
         task = plugin.getServer().getScheduler()
                 .runTaskTimer(plugin, this::tick, 1L, TASK_PERIOD_TICKS);
-        plugin.getLogger().info("[MobSpawn] Scheduler started (taskId=" + task.getTaskId() + ").");
+        LogUtil.schedulerEvent("[MobSpawn] Scheduler started (taskId=" + task.getTaskId() + ").");
     }
 
     public void stop() {
@@ -108,7 +109,7 @@ public class MobSpawnManager {
         zoneRegions.clear();
         zoneLastSafeLocation.clear();
         forceloadedChunks.clear();
-        plugin.getLogger().info("[MobSpawn] Scheduler stopped.");
+        LogUtil.schedulerEvent("[MobSpawn] Scheduler stopped.");
     }
 
     // -------------------------------------------------------------------------
@@ -175,7 +176,7 @@ public class MobSpawnManager {
         tickCounter++;
         if (plugin.getPluginConfig().isDebugMob() && tickCounter % 20 == 0) {
             int playerCount = plugin.getServer().getOnlinePlayers().size();
-            plugin.getLogger().info("[MobSpawn] Scheduler alive — tick #" + tickCounter
+            LogUtil.info("[MobSpawn] Scheduler alive — tick #" + tickCounter
                     + " (players: " + playerCount + ")");
         }
         try {
@@ -188,7 +189,7 @@ public class MobSpawnManager {
                 enforcePersistence();  // Also ensure mobs haven't lost persistent flag
             }
         } catch (Throwable e) {
-            plugin.getLogger().severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
+            LogUtil.severe("[MobSpawn] Uncaught exception in spawn tick — scheduler kept alive:");
             e.printStackTrace();
         }
     }
@@ -419,7 +420,7 @@ public class MobSpawnManager {
                 }
             }
         }
-        plugin.getLogger().warning("[MobSpawn] No valid spawn position in region '"
+        LogUtil.spawnWarning("[MobSpawn] No valid spawn position in region '"
                 + region.getId() + "' after " + attempts + " attempts. "
                 + "Check that the region has accessible solid ground.");
         return null;
@@ -468,7 +469,7 @@ public class MobSpawnManager {
 
     private void debug(String msg) {
         if (plugin.getPluginConfig().isDebugMob()) {
-            plugin.getLogger().info(msg);
+            LogUtil.info(msg);
         }
     }
 }

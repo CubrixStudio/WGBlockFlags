@@ -4,6 +4,7 @@ import net.tylers1066.WGBlockFlags;
 import net.tylers1066.mob.mythic.MythicAdapter;
 import net.tylers1066.mob.mythic.MythicNoopAdapter;
 import net.tylers1066.mob.mythic.MythicV5Adapter;
+import net.tylers1066.util.LogUtil;
 import org.bukkit.Bukkit;
 
 /**
@@ -74,7 +75,7 @@ public class MobModule {
                     new MobDamageListener(this), plugin);
             damageListenerRegistered = true;
         }
-        plugin.getLogger().info("[MobSpawn] Mob spawn module enabled.");
+        LogUtil.moduleLifecycle("[MobSpawn] Mob spawn module enabled.");
     }
 
     /**
@@ -126,15 +127,15 @@ public class MobModule {
      */
     private MythicAdapter resolveMythicAdapter() {
         if (!Bukkit.getPluginManager().isPluginEnabled("MythicMobs")) {
-            plugin.getLogger().info("[MobSpawn] MythicMobs not found — mob spawn module disabled.");
+            LogUtil.moduleLifecycle("[MobSpawn] MythicMobs not found — mob spawn module disabled.");
             return new MythicNoopAdapter();
         }
         try {
             Class.forName("io.lumine.mythic.bukkit.MythicBukkit");
-            plugin.getLogger().info("[MobSpawn] MythicMobs 5.x detected.");
+            LogUtil.moduleLifecycle("[MobSpawn] MythicMobs 5.x detected.");
             return new MythicV5Adapter();
         } catch (ClassNotFoundException e) {
-            plugin.getLogger().warning(
+            LogUtil.spawnWarning(
                     "[MobSpawn] MythicMobs 4.x detected — only 5.x is supported. "
                     + "Mob spawn module disabled. Please upgrade MythicMobs.");
             return new MythicNoopAdapter();

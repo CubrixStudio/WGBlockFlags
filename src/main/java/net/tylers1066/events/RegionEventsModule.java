@@ -1,6 +1,7 @@
 package net.tylers1066.events;
 
 import net.tylers1066.WGBlockFlags;
+import net.tylers1066.util.LogUtil;
 import org.bukkit.plugin.PluginManager;
 
 /**
@@ -25,7 +26,7 @@ public class RegionEventsModule {
         listener = new RegionEventsListener(cache);
         PluginManager pm = plugin.getServer().getPluginManager();
         pm.registerEvents(listener, plugin);
-        plugin.getLogger().info("[RegionEvents] Region events module enabled.");
+        LogUtil.moduleLifecycle("[RegionEvents] Region events module enabled.");
     }
 
     public void disable() {
@@ -44,7 +45,7 @@ public class RegionEventsModule {
             listener.clear();
         }
         cache.rebuild();
-        plugin.getLogger().info("[RegionEvents] Region events module reloaded.");
+        LogUtil.moduleLifecycle("[RegionEvents] Region events module reloaded.");
     }
 
     public RegionEventsCache getCache() {

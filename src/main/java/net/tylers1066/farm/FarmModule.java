@@ -1,6 +1,7 @@
 package net.tylers1066.farm;
 
 import net.tylers1066.WGBlockFlags;
+import net.tylers1066.util.LogUtil;
 import org.bukkit.event.HandlerList;
 
 /**
@@ -34,7 +35,7 @@ public class FarmModule {
         plugin.getServer().getPluginManager().registerEvents(new FarmDropListener(), plugin);
         scheduler.start();
         scheduler.queueLoadedChunksInRegions();
-        plugin.getLogger().info("[FarmModule] Enabled — "
+        LogUtil.moduleLifecycle("[FarmModule] Enabled — "
                 + cache.getAutoGrowRegionCount() + " auto-grow region(s). "
                 + "Chunk scans queued (" + scheduler.getPendingScanCount() + " chunk(s)).");
     }
