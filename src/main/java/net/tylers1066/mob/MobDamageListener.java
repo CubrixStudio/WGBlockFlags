@@ -7,12 +7,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 
 /**
- * Allows players to damage mobs that are tracked by the farm-zone spawn system,
- * regardless of WorldGuard region protection.
+ * Allows players to damage farm-zone mobs without WorldGuard spam.
  *
- * <p>WorldGuard cancels entity-damage events at NORMAL priority. Running at
- * HIGHEST with ignoreCancelled=false ensures we always execute last and can
- * definitively re-allow damage on zone mobs for any player.
+ * <p>Two-stage approach:
+ * <ol>
+ *   <li>LOWEST — cancel the event before WorldGuard sees it. WorldGuard runs at
+ *       HIGH with {@code ignoreCancelled=true}, so it skips the event entirely
+ *       and never sends "Sorry, but you can't harm that here."</li>
+ *   <li>HIGHEST — re-allow the event after all other plugins have processed it,
+ *       so the damage is actually applied to the mob.</li>
+ * </ol>
  */
 public class MobDamageListener implements Listener {
 
@@ -22,15 +26,23 @@ public class MobDamageListener implements Listener {
         this.module = module;
     }
 
+    /** Stage 1 — cancel early so WorldGuard (HIGH, ignoreCancelled=true) skips entirely. */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
+    public void onEntityDamageEarly(EntityDamageByEntityEvent event) {
+        if (!isTrackedPlayerAttack(event)) return;
+        event.setCancelled(true);
+    }
+
+    /** Stage 2 — re-allow after all protection plugins have run. */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onEntityDamage(EntityDamageByEntityEvent event) {
-        if (!(event.getDamager() instanceof Player)) return;
-
-        MobSpawnManager mgr = module.getManager();
-        if (mgr == null) return;
-
-        if (!mgr.isTracked(event.getEntity().getUniqueId())) return;
-
+    public void onEntityDamageLate(EntityDamageByEntityEvent event) {
+        if (!isTrackedPlayerAttack(event)) return;
         event.setCancelled(false);
+    }
+
+    private boolean isTrackedPlayerAttack(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player)) return false;
+        MobSpawnManager mgr = module.getManager();
+        return mgr != null && mgr.isTracked(event.getEntity().getUniqueId());
     }
 }
